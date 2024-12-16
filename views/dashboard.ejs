@@ -21,6 +21,10 @@
             background-color: #ffeeba;
             color: #856404;
         }
+        .status-pending:hover {
+            background-color: #ffdf7e;
+            cursor: pointer;
+        }
         .status-submitted {
             background-color: #d4edda;
             color: #155724;
@@ -125,6 +129,18 @@
                     <div class="col-md-2">
                         <input type="date" class="form-control" name="dateTo" value="<%= filters.dateTo || '' %>" placeholder="To Date">
                     </div>
+                    <div class="col-md-2">
+                        <select class="form-select" name="serviceBy">
+                            <option value="">All Service Providers</option>
+                            <% 
+                            // Get unique service providers
+                            const serviceProviders = [...new Set(ratings.map(r => r.service_by))].sort();
+                            serviceProviders.forEach(provider => { 
+                            %>
+                                <option value="<%= provider %>" <%= filters.serviceBy === provider ? 'selected' : '' %>><%= provider %></option>
+                            <% }); %>
+                        </select>
+                    </div>
                     <div class="col-md-3">
                         <button type="submit" class="btn btn-primary me-2">Apply Filters</button>
                         <a href="/dashboard" class="btn btn-secondary">Reset</a>
@@ -141,6 +157,7 @@
                         <th>Date</th>
                         <th>Customer</th>
                         <th>Service</th>
+                        <th>Service By</th>
                         <th>Rating</th>
                         <th>Review</th>
                         <th>Status</th>
@@ -155,6 +172,7 @@
                             <td><%= rating.invoice_date %></td>
                             <td><%= rating.customer_name %></td>
                             <td><%= rating.service_name %></td>
+                            <td><%= rating.service_by %></td>
                             <td>
                                 <% if (rating.rating) { %>
                                     <div class="rating-stars">
@@ -176,13 +194,29 @@
                                 <% } %>
                             </td>
                             <td>
-                                <span class="status-badge <%= rating.is_submitted ? 'status-submitted' : 'status-pending' %>">
-                                    <%= rating.is_submitted ? 'Submitted' : 'Pending' %>
-                                </span>
+                                <% if (!rating.is_submitted) { %>
+                                    <a href="/rate?invoice=<%= rating.invoice_number %>&token=<%= rating.pending_token %>" 
+                                       class="status-badge status-pending text-decoration-none" 
+                                       target="_blank">
+                                        Pending
+                                    </a>
+                                <% } else { %>
+                                    <span class="status-badge status-submitted">
+                                        Submitted
+                                    </span>
+                                <% } %>
                             </td>
-                            <td><%= new Date(rating.created_at).toLocaleString() %></td>
+                            <td><%= new Date(rating.created_at.replace(' ', 'T') + '+08:00').toLocaleString('en-US', { 
+                                dateStyle: 'medium', 
+                                timeStyle: 'medium',
+                                timeZone: 'Asia/Singapore'
+                            }) %></td>
                             <td>
-                                <%= rating.submitted_at ? new Date(rating.submitted_at).toLocaleString() : '-' %>
+                                <%= rating.submitted_at ? new Date(rating.submitted_at.replace(' ', 'T') + '+08:00').toLocaleString('en-US', { 
+                                    dateStyle: 'medium', 
+                                    timeStyle: 'medium',
+                                    timeZone: 'Asia/Singapore'
+                                }) : '-' %>
                             </td>
                         </tr>
                     <% }); %>

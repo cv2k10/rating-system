@@ -42,6 +42,10 @@
                 <label for="service_name" class="form-label">Service Name</label>
                 <input type="text" class="form-control" id="service_name" required>
             </div>
+            <div class="mb-3">
+                <label for="service_by" class="form-label">Service By</label>
+                <input type="text" class="form-control" id="service_by" required>
+            </div>
             <button type="submit" class="btn btn-primary">Generate Link</button>
         </form>
 
@@ -50,6 +54,8 @@
             <div class="alert alert-success generated-url" id="generatedUrl"></div>
             <button class="btn btn-secondary" onclick="copyToClipboard()">Copy Link</button>
         </div>
+
+        <div id="error" class="alert alert-danger d-none"></div>
     </div>
 
     <script>
@@ -60,10 +66,14 @@
                 invoice_number: document.getElementById('invoice_number').value,
                 invoice_date: document.getElementById('invoice_date').value,
                 customer_name: document.getElementById('customer_name').value,
-                service_name: document.getElementById('service_name').value
+                service_name: document.getElementById('service_name').value,
+                service_by: document.getElementById('service_by').value
             };
 
             try {
+                document.getElementById('error').classList.add('d-none');
+                document.getElementById('result').classList.add('d-none');
+
                 const response = await fetch('/generate-link', {
                     method: 'POST',
                     headers: {
@@ -73,13 +83,19 @@
                 });
 
                 const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Error generating link');
+                }
+
                 if (data.url) {
                     document.getElementById('result').classList.remove('d-none');
                     document.getElementById('generatedUrl').textContent = data.url;
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error generating link');
+                const errorDiv = document.getElementById('error');
+                errorDiv.textContent = error.message;
+                errorDiv.classList.remove('d-none');
             }
         });
 

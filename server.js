@@ -31,10 +31,11 @@ const initDb = () => {
         invoice_date TEXT NOT NULL,
         customer_name TEXT NOT NULL,
         service_name TEXT NOT NULL,
+        service_by TEXT NOT NULL,
         validation_token TEXT NOT NULL,
         rating INTEGER,
         review_text TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now', '+8 hours')),
         submitted_at DATETIME,
         is_submitted BOOLEAN DEFAULT 0
     )`;
@@ -64,21 +65,32 @@ app.get('/', (req, res) => {
 });
 
 app.get('/dashboard', (req, res) => {
-    const { search, status, dateFrom, dateTo } = req.query;
+    const { search, status, dateFrom, dateTo, serviceBy } = req.query;
     
-    let sql = `SELECT * FROM ratings`;
+    let sql = `SELECT *, 
+               CASE 
+                   WHEN is_submitted = 0 
+                   THEN validation_token 
+                   ELSE NULL 
+               END as pending_token 
+               FROM ratings`;
     let params = [];
     let conditions = [];
     
     if (search) {
-        conditions.push(`(invoice_number LIKE ? OR customer_name LIKE ? OR service_name LIKE ?)`);
-        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        conditions.push(`(invoice_number LIKE ? OR customer_name LIKE ? OR service_name LIKE ? OR service_by LIKE ?)`);
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
     
     if (status === 'pending') {
         conditions.push('is_submitted = 0');
     } else if (status === 'submitted') {
         conditions.push('is_submitted = 1');
+    }
+
+    if (serviceBy) {
+        conditions.push('service_by = ?');
+        params.push(serviceBy);
     }
     
     if (dateFrom) {
@@ -115,10 +127,19 @@ app.get('/dashboard', (req, res) => {
             if (err) {
                 return res.status(500).render('error', { message: 'Database error' });
             }
+
+            // Convert dates to local format
+            ratings = ratings.map(rating => ({
+                ...rating,
+                invoice_date: rating.invoice_date ? new Date(rating.invoice_date).toLocaleDateString() : rating.invoice_date,
+                created_at: rating.created_at,
+                submitted_at: rating.submitted_at
+            }));
+
             res.render('dashboard', { 
                 ratings,
                 stats,
-                filters: { search, status, dateFrom, dateTo }
+                filters: { search, status, dateFrom, dateTo, serviceBy }
             });
         });
     });
@@ -130,6 +151,7 @@ app.get('/export-csv', (req, res) => {
         invoice_date,
         customer_name,
         service_name,
+        service_by,
         rating,
         review_text,
         CASE WHEN is_submitted = 1 THEN 'Submitted' ELSE 'Pending' END as status,
@@ -140,21 +162,30 @@ app.get('/export-csv', (req, res) => {
 
     db.all(sql, [], (err, ratings) => {
         if (err) {
-            return res.status(500).json({ error: 'Database error' });
+            return res.status(500).json({ error: err.message });
         }
 
-        const csvHeader = 'Invoice Number,Date,Customer,Service,Rating,Review,Status,Created,Submitted\n';
+        const csvHeader = 'Invoice Number,Date,Customer,Service,Service By,Rating,Review,Status,Created,Submitted\n';
         const csvRows = ratings.map(r => {
             return [
                 r.invoice_number,
                 r.invoice_date,
                 r.customer_name,
                 r.service_name,
+                r.service_by,
                 r.rating || '',
-                `"${(r.review_text || '').replace(/"/g, '""')}"`,
+                r.review_text ? `"${r.review_text.replace(/"/g, '""')}"` : '',
                 r.status,
-                new Date(r.created_at).toLocaleString(),
-                r.submitted_at ? new Date(r.submitted_at).toLocaleString() : ''
+                new Date(r.created_at.replace(' ', 'T') + '+08:00').toLocaleString('en-US', { 
+                    dateStyle: 'medium', 
+                    timeStyle: 'medium',
+                    timeZone: 'Asia/Singapore'
+                }),
+                r.submitted_at ? new Date(r.submitted_at.replace(' ', 'T') + '+08:00').toLocaleString('en-US', { 
+                    dateStyle: 'medium', 
+                    timeStyle: 'medium',
+                    timeZone: 'Asia/Singapore'
+                }) : ''
             ].join(',');
         }).join('\n');
 
@@ -165,19 +196,33 @@ app.get('/export-csv', (req, res) => {
 });
 
 app.post('/generate-link', (req, res) => {
-    const { invoice_number, invoice_date, customer_name, service_name } = req.body;
-    const validation_token = generateToken(invoice_number);
+    const { invoice_number, invoice_date, customer_name, service_name, service_by } = req.body;
     
-    const sql = `INSERT INTO ratings (invoice_number, invoice_date, customer_name, service_name, validation_token) 
-                 VALUES (?, ?, ?, ?, ?)`;
-    
-    db.run(sql, [invoice_number, invoice_date, customer_name, service_name, validation_token], function(err) {
+    // Check if invoice number already exists
+    const checkSql = `SELECT COUNT(*) as count FROM ratings WHERE invoice_number = ?`;
+    db.get(checkSql, [invoice_number], (err, result) => {
         if (err) {
-            return res.status(500).json({ error: err.message });
+            return res.status(500).json({ error: 'Database error' });
         }
         
-        const ratingUrl = `${req.protocol}://${req.get('host')}/rate?invoice=${invoice_number}&token=${validation_token}`;
-        res.json({ url: ratingUrl });
+        if (result.count > 0) {
+            return res.status(400).json({ error: 'This invoice number already has a rating link generated' });
+        }
+
+        const validation_token = generateToken(invoice_number);
+        const formattedInvoiceDate = new Date(invoice_date).toISOString().split('T')[0];
+        
+        const sql = `INSERT INTO ratings (invoice_number, invoice_date, customer_name, service_name, service_by, validation_token) 
+                     VALUES (?, ?, ?, ?, ?, ?)`;
+        
+        db.run(sql, [invoice_number, formattedInvoiceDate, customer_name, service_name, service_by, validation_token], function(err) {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            
+            const ratingUrl = `${req.protocol}://${req.get('host')}/rate?invoice=${invoice_number}&token=${validation_token}`;
+            res.json({ url: ratingUrl });
+        });
     });
 });
 
@@ -200,7 +245,7 @@ app.post('/submit-rating', (req, res) => {
     const { invoice_number, validation_token, rating, review_text } = req.body;
     
     const sql = `UPDATE ratings 
-                 SET rating = ?, review_text = ?, is_submitted = 1, submitted_at = DATETIME('now') 
+                 SET rating = ?, review_text = ?, is_submitted = 1, submitted_at = datetime('now', '+8 hours')
                  WHERE invoice_number = ? AND validation_token = ? AND is_submitted = 0`;
     
     db.run(sql, [rating, review_text, invoice_number, validation_token], function(err) {
