@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ratings Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .container-fluid { margin-top: 30px; padding: 0 30px; }
+        .star { color: #ffd700; }
+        .empty-star { color: #ddd; }
+        .nav-tabs { margin-bottom: 20px; }
+        .table-responsive { margin-top: 20px; }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.85em;
+        }
+        .status-pending {
+            background-color: #ffeeba;
+            color: #856404;
+        }
+        .status-submitted {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .review-text {
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stats-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+        .filters-section {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <nav>
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">Generate Rating Link</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/dashboard">Ratings Dashboard</a>
+                </li>
+            </ul>
+        </nav>
+
+        <div class="row mb-4">
+            <div class="col">
+                <h1>Ratings Dashboard</h1>
+            </div>
+            <div class="col text-end">
+                <a href="/export-csv" class="btn btn-success">
+                    <i class="fas fa-download"></i> Export to CSV
+                </a>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="stats-card">
+            <div class="row">
+                <div class="col-md-3 stat-item">
+                    <div class="stat-value"><%= stats.total %></div>
+                    <div class="stat-label">Total Ratings</div>
+                </div>
+                <div class="col-md-3 stat-item">
+                    <div class="stat-value"><%= stats.submitted %></div>
+                    <div class="stat-label">Submitted</div>
+                </div>
+                <div class="col-md-3 stat-item">
+                    <div class="stat-value"><%= stats.pending %></div>
+                    <div class="stat-label">Pending</div>
+                </div>
+                <div class="col-md-3 stat-item">
+                    <div class="stat-value"><%= stats.avg_rating %></div>
+                    <div class="stat-label">Average Rating</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters-section">
+            <form id="filterForm" method="GET">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <input type="text" class="form-control" name="search" placeholder="Search..." value="<%= filters.search || '' %>">
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" name="status">
+                            <option value="">All Status</option>
+                            <option value="pending" <%= filters.status === 'pending' ? 'selected' : '' %>>Pending</option>
+                            <option value="submitted" <%= filters.status === 'submitted' ? 'selected' : '' %>>Submitted</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" class="form-control" name="dateFrom" value="<%= filters.dateFrom || '' %>" placeholder="From Date">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" class="form-control" name="dateTo" value="<%= filters.dateTo || '' %>" placeholder="To Date">
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary me-2">Apply Filters</button>
+                        <a href="/dashboard" class="btn btn-secondary">Reset</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Service</th>
+                        <th>Rating</th>
+                        <th>Review</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Submitted</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% ratings.forEach(rating => { %>
+                        <tr>
+                            <td><%= rating.invoice_number %></td>
+                            <td><%= rating.invoice_date %></td>
+                            <td><%= rating.customer_name %></td>
+                            <td><%= rating.service_name %></td>
+                            <td>
+                                <% if (rating.rating) { %>
+                                    <div class="rating-stars">
+                                        <% for(let i = 1; i <= 5; i++) { %>
+                                            <i class="fas fa-star <%= i <= rating.rating ? 'star' : 'empty-star' %>"></i>
+                                        <% } %>
+                                    </div>
+                                <% } else { %>
+                                    -
+                                <% } %>
+                            </td>
+                            <td>
+                                <% if (rating.review_text) { %>
+                                    <div class="review-text" title="<%= rating.review_text %>">
+                                        <%= rating.review_text %>
+                                    </div>
+                                <% } else { %>
+                                    -
+                                <% } %>
+                            </td>
+                            <td>
+                                <span class="status-badge <%= rating.is_submitted ? 'status-submitted' : 'status-pending' %>">
+                                    <%= rating.is_submitted ? 'Submitted' : 'Pending' %>
+                                </span>
+                            </td>
+                            <td><%= new Date(rating.created_at).toLocaleString() %></td>
+                            <td>
+                                <%= rating.submitted_at ? new Date(rating.submitted_at).toLocaleString() : '-' %>
+                            </td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

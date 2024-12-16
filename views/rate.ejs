@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Rating</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .container { max-width: 800px; margin-top: 50px; }
+        .star-rating { font-size: 2em; }
+        .star { cursor: pointer; color: #ddd; }
+        .star.active { color: #ffd700; }
+        .info-card { background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="info-card">
+            <h2>Service Details</h2>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Invoice Number:</strong> <%= rating.invoice_number %></p>
+                    <p><strong>Invoice Date:</strong> <%= rating.invoice_date %></p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Customer Name:</strong> <%= rating.customer_name %></p>
+                    <p><strong>Service:</strong> <%= rating.service_name %></p>
+                </div>
+            </div>
+        </div>
+
+        <form id="ratingForm">
+            <input type="hidden" id="invoice_number" value="<%= rating.invoice_number %>">
+            <input type="hidden" id="validation_token" value="<%= rating.validation_token %>">
+            
+            <div class="mb-4">
+                <h3>Rate your experience</h3>
+                <div class="star-rating">
+                    <span class="star" data-rating="1"><i class="fas fa-star"></i></span>
+                    <span class="star" data-rating="2"><i class="fas fa-star"></i></span>
+                    <span class="star" data-rating="3"><i class="fas fa-star"></i></span>
+                    <span class="star" data-rating="4"><i class="fas fa-star"></i></span>
+                    <span class="star" data-rating="5"><i class="fas fa-star"></i></span>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label for="review" class="form-label">Your Review (Optional)</label>
+                <textarea class="form-control" id="review" rows="4" maxlength="500" placeholder="Tell us about your experience..."></textarea>
+                <div class="form-text">Maximum 500 characters</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Submit Rating</button>
+        </form>
+
+        <div id="thankYou" class="alert alert-success mt-4 d-none">
+            Thank you for your feedback! Your rating has been submitted successfully.
+        </div>
+    </div>
+
+    <script>
+        let selectedRating = 0;
+
+        // Star rating interaction
+        document.querySelectorAll('.star').forEach(star => {
+            star.addEventListener('mouseover', function() {
+                const rating = this.dataset.rating;
+                updateStars(rating);
+            });
+
+            star.addEventListener('click', function() {
+                selectedRating = this.dataset.rating;
+                updateStars(selectedRating);
+            });
+        });
+
+        document.querySelector('.star-rating').addEventListener('mouseout', function() {
+            updateStars(selectedRating);
+        });
+
+        function updateStars(rating) {
+            document.querySelectorAll('.star').forEach(star => {
+                star.classList.toggle('active', star.dataset.rating <= rating);
+            });
+        }
+
+        // Form submission
+        document.getElementById('ratingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!selectedRating) {
+                alert('Please select a rating');
+                return;
+            }
+
+            const formData = {
+                invoice_number: document.getElementById('invoice_number').value,
+                validation_token: document.getElementById('validation_token').value,
+                rating: selectedRating,
+                review_text: document.getElementById('review').value
+            };
+
+            try {
+                const response = await fetch('/submit-rating', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('ratingForm').classList.add('d-none');
+                    document.getElementById('thankYou').classList.remove('d-none');
+                } else {
+                    alert('Error submitting rating');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error submitting rating');
+            }
+        });
+    </script>
+</body>
+</html>
