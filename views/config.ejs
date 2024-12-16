@@ -39,51 +39,6 @@
 
         <h1 class="mb-4">System Configuration</h1>
 
-        <!-- Invoice Configuration -->
-        <div class="config-section">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2>Invoice Configuration</h2>
-            </div>
-            <div class="card">
-                <div class="card-body">
-                    <form id="invoiceConfigForm">
-                        <div class="mb-3">
-                            <label class="form-label">Invoice Number Format</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="invoiceType" value="auto" 
-                                    <%= !invoiceConfig.is_manual ? 'checked' : '' %>>
-                                <label class="form-check-label">Auto-generate</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="invoiceType" value="manual"
-                                    <%= invoiceConfig.is_manual ? 'checked' : '' %>>
-                                <label class="form-check-label">Manual input</label>
-                            </div>
-                        </div>
-                        <div id="autoConfig" class="<%= invoiceConfig.is_manual ? 'd-none' : '' %>">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">Prefix</label>
-                                        <input type="text" class="form-control" name="prefix" 
-                                            value="<%= invoiceConfig.prefix %>">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">Current Number</label>
-                                        <input type="number" class="form-control" name="currentNumber" 
-                                            value="<%= invoiceConfig.current_number %>">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Save Invoice Configuration</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
         <!-- Customers Configuration -->
         <div class="config-section">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -217,49 +172,14 @@
     <script>
         // Modal instance
         let configModal;
-        let currentType = '';
-        let currentId = null;
         
         document.addEventListener('DOMContentLoaded', function() {
             configModal = new bootstrap.Modal(document.getElementById('configModal'));
             
-            // Handle invoice type radio change
-            document.querySelectorAll('input[name="invoiceType"]').forEach(radio => {
-                radio.addEventListener('change', function() {
-                    document.getElementById('autoConfig').classList.toggle('d-none', this.value === 'manual');
-                });
-            });
-
-            // Handle invoice config form submission
-            document.getElementById('invoiceConfigForm').addEventListener('submit', async function(e) {
+            // Handle form submission
+            document.getElementById('configForm').addEventListener('submit', function(e) {
                 e.preventDefault();
-                const formData = {
-                    is_manual: document.querySelector('input[name="invoiceType"]:checked').value === 'manual',
-                    prefix: document.querySelector('input[name="prefix"]').value,
-                    current_number: parseInt(document.querySelector('input[name="currentNumber"]').value)
-                };
-
-                try {
-                    const response = await fetch('/api/config/invoice', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
-
-                    if (!response.ok) throw new Error('Failed to save invoice configuration');
-                    
-                    // Reload the page to reflect changes
-                    window.location.reload();
-                } catch (error) {
-                    console.error('Error:', error);
-                    alert('Error saving invoice configuration');
-                }
-            });
-
-            document.getElementById('itemType').addEventListener('change', function() {
-                const isCustomer = this.value === 'customer';
-                document.getElementById('customerFields').classList.toggle('d-none', !isCustomer);
-                document.getElementById('otherFields').classList.toggle('d-none', isCustomer);
+                saveItem();
             });
         });
 
@@ -334,15 +254,15 @@
 
             try {
                 const response = await fetch(`/api/config/${type}/${id}/toggle`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    method: 'POST'
                 });
 
                 if (!response.ok) throw new Error('Failed to toggle item status');
+                
                 window.location.reload();
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error updating item status');
+                alert('Error toggling item status');
             }
         }
     </script>

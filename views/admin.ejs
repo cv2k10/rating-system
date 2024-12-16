@@ -40,14 +40,19 @@
             </div>
             <div class="mb-3">
                 <label for="customer_name" class="form-label">Customer</label>
-                <select class="form-select" id="customer_name" required>
-                    <option value="">Select Customer</option>
-                    <% customers.forEach(customer => { %>
-                        <% if (customer.is_active) { %>
-                            <option value="<%= customer.name %>"><%= customer.name %></option>
-                        <% } %>
-                    <% }); %>
-                </select>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="customer_search" placeholder="Search by customer ID...">
+                    <select class="form-select" id="customer_name" required>
+                        <option value="">Select Customer</option>
+                        <% customers.forEach(customer => { %>
+                            <option value="<%= customer.name %>" 
+                                    data-customer-id="<%= customer.customer_id %>"
+                                    data-search-text="<%= customer.customer_id %> <%= customer.name %>">
+                                <%= customer.name %> (<%= customer.customer_id %>)
+                            </option>
+                        <% }); %>
+                    </select>
+                </div>
             </div>
             <div class="mb-3">
                 <label for="service_name" class="form-label">Service</label>
@@ -100,46 +105,93 @@
             const generateForm = document.getElementById('generateForm');
             const generateBtn = document.getElementById('generateBtn');
             const nextBtn = document.getElementById('nextBtn');
+            const customerSearch = document.getElementById('customer_search');
+            const customerSelect = document.getElementById('customer_name');
             
-            // Function to save form data
+            // Store all customer options for filtering
+            const allCustomerOptions = Array.from(customerSelect.options).slice(1); // Skip the "Select Customer" option
+            
+            // Customer search functionality
+            customerSearch.addEventListener('input', function(e) {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                updateCustomerOptions(searchTerm);
+            });
+
+            // Function to update customer options based on search term
+            function updateCustomerOptions(searchTerm) {
+                // Clear current options (except the first one)
+                while (customerSelect.options.length > 1) {
+                    customerSelect.remove(1);
+                }
+                
+                // Filter and add matching options
+                allCustomerOptions.forEach(option => {
+                    const searchText = option.getAttribute('data-search-text').toLowerCase();
+                    if (searchText.includes(searchTerm)) {
+                        customerSelect.add(option.cloneNode(true));
+                    }
+                });
+
+                // If no matches found, show a "No results" option
+                if (customerSelect.options.length === 1 && searchTerm !== '') {
+                    const noResults = new Option('No matching customers found', '');
+                    noResults.disabled = true;
+                    customerSelect.add(noResults);
+                }
+
+                // If only one match is found (excluding the placeholder options), auto-select it
+                if (customerSelect.options.length === 2 && searchTerm !== '') {
+                    customerSelect.selectedIndex = 1;
+                }
+            }
+
+            // Handle customer select change
+            customerSelect.addEventListener('change', function() {
+                if (this.value) {
+                    const selectedOption = this.options[this.selectedIndex];
+                    const customerId = selectedOption.getAttribute('data-customer-id');
+                    customerSearch.value = customerId;
+                }
+            });
+
+            // Save form data
             function saveFormData() {
                 const formData = {
                     invoice_number: document.getElementById('invoice_number').value,
                     invoice_date: document.getElementById('invoice_date').value,
                     customer_name: document.getElementById('customer_name').value,
+                    customer_search: document.getElementById('customer_search').value,
                     service_name: document.getElementById('service_name').value,
-                    service_by: document.getElementById('service_by').value,
+                    service_by: document.getElementById('service_by').value
                 };
                 localStorage.setItem('formData', JSON.stringify(formData));
             }
 
-            // Function to load form data
-            function loadFormData() {
-                const savedData = localStorage.getItem('formData');
-                if (savedData) {
-                    const formData = JSON.parse(savedData);
-                    if (formData.invoice_number) {
-                        document.getElementById('invoice_number').value = formData.invoice_number;
+            // Load saved form data
+            const savedData = localStorage.getItem('formData');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                Object.keys(data).forEach(key => {
+                    const element = document.getElementById(key);
+                    if (element) {
+                        element.value = data[key];
+                        if (key === 'customer_search') {
+                            updateCustomerOptions(data[key].toLowerCase().trim());
+                        }
                     }
-                    document.getElementById('invoice_date').value = formData.invoice_date || '';
-                    document.getElementById('customer_name').value = formData.customer_name || '';
-                    document.getElementById('service_name').value = formData.service_name || '';
-                    document.getElementById('service_by').value = formData.service_by || '';
-                }
+                });
             }
 
+            // Save form data when any input changes
+            generateForm.addEventListener('change', saveFormData);
+            customerSearch.addEventListener('input', saveFormData);
+
             // Load saved form data and rating link on page load
-            loadFormData();
             const savedRatingUrl = localStorage.getItem('lastGeneratedUrl');
             if (savedRatingUrl) {
                 showGeneratedLink(JSON.parse(savedRatingUrl).url);
                 showNextButton();
             }
-
-            // Save form data when inputs change
-            ['invoice_number', 'invoice_date', 'customer_name', 'service_name', 'service_by'].forEach(id => {
-                document.getElementById(id).addEventListener('change', saveFormData);
-            });
 
             // Next button handler
             nextBtn.addEventListener('click', function() {
@@ -153,6 +205,7 @@
                 document.getElementById('invoice_number').value = '';
                 document.getElementById('invoice_date').value = '';
                 document.getElementById('customer_name').value = '';
+                document.getElementById('customer_search').value = '';
                 document.getElementById('service_name').value = '';
                 document.getElementById('service_by').value = '';
                 

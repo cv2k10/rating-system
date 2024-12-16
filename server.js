@@ -63,12 +63,9 @@ function generateToken(invoiceNumber) {
 // Function to get next invoice number without incrementing
 async function getFormattedInvoiceNumber() {
     return new Promise((resolve, reject) => {
-        db.get('SELECT * FROM invoice_config WHERE id = 1', [], (err, config) => {
-            if (err) return reject(err);
-            if (!config || config.is_manual) return resolve(null);
-            
-            const formattedNumber = `${config.prefix}${String(config.current_number).padStart(6, '0')}`;
-            resolve(formattedNumber);
+        db.get('SELECT * FROM invoice_config WHERE id = 1', [], (err, row) => {
+            if (err) reject(err);
+            else resolve('');  // Always return empty string since we're using manual input
         });
     });
 }
@@ -95,48 +92,52 @@ async function getAndIncrementInvoiceNumber() {
 }
 
 // Routes
-app.get('/', async (req, res) => {
-    try {
-        const customers = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM customers ORDER BY name', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
+app.get('/', (req, res) => {
+    // Get customers
+    db.all('SELECT id, name, customer_id, is_active FROM customers WHERE is_active = 1', [], (err, customers) => {
+        if (err) {
+            console.error('Error fetching customers:', err);
+            return res.status(500).send('Error loading page');
+        }
+
+        // Get services
+        db.all('SELECT id, name, is_active FROM services WHERE is_active = 1', [], (err, services) => {
+            if (err) {
+                console.error('Error fetching services:', err);
+                return res.status(500).send('Error loading page');
+            }
+
+            // Get service providers
+            db.all('SELECT id, name, is_active FROM service_providers WHERE is_active = 1', [], (err, providers) => {
+                if (err) {
+                    console.error('Error fetching providers:', err);
+                    return res.status(500).send('Error loading page');
+                }
+
+                // Get invoice config
+                db.get('SELECT * FROM invoice_config WHERE id = 1', [], (err, invoiceConfig) => {
+                    if (err) {
+                        console.error('Error fetching invoice config:', err);
+                        return res.status(500).send('Error loading page');
+                    }
+
+                    // Get formatted invoice number
+                    getFormattedInvoiceNumber().then(nextInvoiceNumber => {
+                        res.render('admin', {
+                            customers,
+                            services,
+                            providers,
+                            invoiceConfig,
+                            nextInvoiceNumber
+                        });
+                    }).catch(err => {
+                        console.error('Error getting invoice number:', err);
+                        res.status(500).send('Error loading page');
+                    });
+                });
             });
         });
-
-        const services = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM services ORDER BY name', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
-
-        const providers = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM service_providers ORDER BY name', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
-
-        const invoiceConfig = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM invoice_config WHERE id = 1', [], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-
-        const nextInvoiceNumber = await getFormattedInvoiceNumber();
-        
-        res.render('admin', { 
-            customers, 
-            services, 
-            providers, 
-            invoiceConfig,
-            nextInvoiceNumber
-        });
-    } catch (error) {
-        res.status(500).render('error', { message: 'Database error' });
-    }
+    });
 });
 
 app.get('/dashboard', (req, res) => {
@@ -343,58 +344,43 @@ app.post('/submit-rating', (req, res) => {
     });
 });
 
-// Configuration routes
-app.get('/config', async (req, res) => {
-    try {
-        // Get all configuration data
-        const customers = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM customers ORDER BY name', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
+// Config page route
+app.get('/config', (req, res) => {
+    // Get customers
+    db.all('SELECT * FROM customers ORDER BY name', [], (err, customers) => {
+        if (err) {
+            console.error('Error fetching customers:', err);
+            return res.status(500).send('Error loading page');
+        }
+
+        // Get services
+        db.all('SELECT * FROM services ORDER BY name', [], (err, services) => {
+            if (err) {
+                console.error('Error fetching services:', err);
+                return res.status(500).send('Error loading page');
+            }
+
+            // Get service providers
+            db.all('SELECT * FROM service_providers ORDER BY name', [], (err, providers) => {
+                if (err) {
+                    console.error('Error fetching providers:', err);
+                    return res.status(500).send('Error loading page');
+                }
+
+                res.render('config', {
+                    customers,
+                    services,
+                    providers
+                });
             });
         });
-
-        const services = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM services ORDER BY name', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
-
-        const providers = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM service_providers ORDER BY name', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
-
-        const invoiceConfig = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM invoice_config WHERE id = 1', [], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-
-        res.render('config', { customers, services, providers, invoiceConfig });
-    } catch (error) {
-        res.status(500).render('error', { message: 'Database error' });
-    }
+    });
 });
 
 // API endpoints for configuration
 app.post('/api/config/invoice', (req, res) => {
-    const { is_manual, prefix, current_number } = req.body;
-    const sql = `UPDATE invoice_config 
-                 SET is_manual = ?, prefix = ?, current_number = ?, updated_at = datetime('now', '+8 hours')
-                 WHERE id = 1`;
-    
-    // Convert is_manual to integer for SQLite
-    const isManualInt = is_manual ? 1 : 0;
-    
-    db.run(sql, [isManualInt, prefix, current_number], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
-    });
+    // Removed invoice configuration handling
+    res.json({ success: true });
 });
 
 // Generic CRUD operations for config items
