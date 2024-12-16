@@ -97,13 +97,18 @@
                     <div id="customersList">
                         <% customers.forEach(customer => { %>
                             <div class="config-item <%= customer.is_active ? '' : 'inactive' %>" data-id="<%= customer.id %>">
-                                <span class="item-name"><%= customer.name %></span>
+                                <div>
+                                    <strong class="me-2"><%= customer.customer_id %></strong>
+                                    <span class="item-name"><%= customer.name %></span>
+                                </div>
                                 <div class="config-actions">
-                                    <button class="btn btn-sm btn-outline-primary" onclick="editItem('customer', <%= customer.id %>, '<%= customer.name %>')">
+                                    <button class="btn btn-sm btn-outline-primary me-2" 
+                                            onclick="showAddModal('customer', '<%= customer.id %>', '<%= customer.name %>', '<%= customer.customer_id %>')">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="toggleItem('customer', <%= customer.id %>, <%= customer.is_active %>)">
-                                        <i class="fas fa-<%= customer.is_active ? 'trash' : 'undo' %>"></i>
+                                    <button class="btn btn-sm <%= customer.is_active ? 'btn-outline-danger' : 'btn-outline-success' %>"
+                                            onclick="toggleItem('customer', '<%= customer.id %>', <%= customer.is_active %>)">
+                                        <i class="fas fa-<%= customer.is_active ? 'times' : 'check' %>"></i>
                                     </button>
                                 </div>
                             </div>
@@ -128,7 +133,7 @@
                             <div class="config-item <%= service.is_active ? '' : 'inactive' %>" data-id="<%= service.id %>">
                                 <span class="item-name"><%= service.name %></span>
                                 <div class="config-actions">
-                                    <button class="btn btn-sm btn-outline-primary" onclick="editItem('service', <%= service.id %>, '<%= service.name %>')">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="showAddModal('service', <%= service.id %>, '<%= service.name %>')">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-danger" onclick="toggleItem('service', <%= service.id %>, <%= service.is_active %>)">
@@ -157,7 +162,7 @@
                             <div class="config-item <%= provider.is_active ? '' : 'inactive' %>" data-id="<%= provider.id %>">
                                 <span class="item-name"><%= provider.name %></span>
                                 <div class="config-actions">
-                                    <button class="btn btn-sm btn-outline-primary" onclick="editItem('provider', <%= provider.id %>, '<%= provider.name %>')">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="showAddModal('provider', <%= provider.id %>, '<%= provider.name %>')">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-danger" onclick="toggleItem('provider', <%= provider.id %>, <%= provider.is_active %>)">
@@ -181,11 +186,21 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="configItemForm">
-                        <input type="hidden" id="itemId">
+                    <form id="configForm">
                         <input type="hidden" id="itemType">
-                        <div class="mb-3">
-                            <label class="form-label">Name</label>
+                        <input type="hidden" id="itemId">
+                        <div id="customerFields" class="mb-3 d-none">
+                            <div class="mb-3">
+                                <label for="customerId" class="form-label">Customer ID</label>
+                                <input type="text" class="form-control" id="customerId" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="customerName" class="form-label">Customer Name</label>
+                                <input type="text" class="form-control" id="customerName" required>
+                            </div>
+                        </div>
+                        <div id="otherFields" class="mb-3 d-none">
+                            <label for="itemName" class="form-label">Name</label>
                             <input type="text" class="form-control" id="itemName" required>
                         </div>
                     </form>
@@ -202,6 +217,8 @@
     <script>
         // Modal instance
         let configModal;
+        let currentType = '';
+        let currentId = null;
         
         document.addEventListener('DOMContentLoaded', function() {
             configModal = new bootstrap.Modal(document.getElementById('configModal'));
@@ -238,41 +255,77 @@
                     alert('Error saving invoice configuration');
                 }
             });
+
+            document.getElementById('itemType').addEventListener('change', function() {
+                const isCustomer = this.value === 'customer';
+                document.getElementById('customerFields').classList.toggle('d-none', !isCustomer);
+                document.getElementById('otherFields').classList.toggle('d-none', isCustomer);
+            });
         });
 
-        function showAddModal(type) {
-            document.getElementById('modalTitle').textContent = `Add ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-            document.getElementById('itemType').value = type;
-            document.getElementById('itemId').value = '';
-            document.getElementById('itemName').value = '';
-            configModal.show();
-        }
-
-        function editItem(type, id, name) {
-            document.getElementById('modalTitle').textContent = `Edit ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-            document.getElementById('itemType').value = type;
-            document.getElementById('itemId').value = id;
-            document.getElementById('itemName').value = name;
+        function showAddModal(type, id = null, name = '', customer_id = '') {
+            currentType = type;
+            currentId = id;
+            
+            // Reset form
+            document.getElementById('configForm').reset();
+            
+            // Update modal title
+            document.getElementById('modalTitle').textContent = `${id ? 'Edit' : 'Add'} ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+            
+            // Show/hide appropriate fields
+            if (type === 'customer') {
+                document.getElementById('customerFields').classList.remove('d-none');
+                document.getElementById('otherFields').classList.add('d-none');
+                if (id) {
+                    document.getElementById('customerId').value = customer_id;
+                    document.getElementById('customerName').value = name;
+                }
+            } else {
+                document.getElementById('customerFields').classList.add('d-none');
+                document.getElementById('otherFields').classList.remove('d-none');
+                if (id) document.getElementById('itemName').value = name;
+            }
+            
             configModal.show();
         }
 
         async function saveItem() {
-            const type = document.getElementById('itemType').value;
-            const id = document.getElementById('itemId').value;
-            const name = document.getElementById('itemName').value;
+            const type = currentType;
+            const id = currentId;
+            let data = {};
+            
+            if (type === 'customer') {
+                data = {
+                    customer_id: document.getElementById('customerId').value,
+                    name: document.getElementById('customerName').value
+                };
+            } else {
+                data = {
+                    name: document.getElementById('itemName').value
+                };
+            }
 
             try {
-                const response = await fetch(`/api/config/${type}${id ? `/${id}` : ''}`, {
+                const url = id 
+                    ? `/api/config/${type}/${id}`
+                    : `/api/config/${type}`;
+                
+                const response = await fetch(url, {
                     method: id ? 'PUT' : 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name })
+                    body: JSON.stringify(data)
                 });
 
-                if (!response.ok) throw new Error(`Failed to ${id ? 'update' : 'add'} item`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save item');
+                }
+
+                configModal.hide();
                 window.location.reload();
             } catch (error) {
-                console.error('Error:', error);
-                alert(`Error ${id ? 'updating' : 'adding'} item`);
+                alert(error.message);
             }
         }
 

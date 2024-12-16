@@ -401,29 +401,60 @@ app.post('/api/config/invoice', (req, res) => {
 function handleConfigItem(type, table) {
     // Create
     app.post(`/api/config/${type}`, (req, res) => {
-        const { name } = req.body;
-        const sql = `INSERT INTO ${table} (name) VALUES (?)`;
+        const { name, customer_id } = req.body;
+        let sql, params;
         
-        db.run(sql, [name], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
+        if (type === 'customer') {
+            sql = `INSERT INTO ${table} (name, customer_id) VALUES (?, ?)`;
+            params = [name, customer_id];
+        } else {
+            sql = `INSERT INTO ${table} (name) VALUES (?)`;
+            params = [name];
+        }
+        
+        db.run(sql, params, function(err) {
+            if (err) {
+                console.error(err);
+                if (err.code === 'SQLITE_CONSTRAINT') {
+                    return res.status(400).json({ error: 'Customer ID must be unique' });
+                }
+                return res.status(500).json({ error: err.message });
+            }
             res.json({ id: this.lastID });
         });
     });
 
     // Update
     app.put(`/api/config/${type}/:id`, (req, res) => {
-        const { name } = req.body;
-        const sql = `UPDATE ${table} SET name = ? WHERE id = ?`;
+        const { name, customer_id } = req.body;
+        let sql, params;
         
-        db.run(sql, [name, req.params.id], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
+        if (type === 'customer') {
+            sql = `UPDATE ${table} SET name = ?, customer_id = ?, updated_at = datetime('now', '+8 hours') WHERE id = ?`;
+            params = [name, customer_id, req.params.id];
+        } else {
+            sql = `UPDATE ${table} SET name = ?, updated_at = datetime('now', '+8 hours') WHERE id = ?`;
+            params = [name, req.params.id];
+        }
+        
+        db.run(sql, params, function(err) {
+            if (err) {
+                console.error(err);
+                if (err.code === 'SQLITE_CONSTRAINT') {
+                    return res.status(400).json({ error: 'Customer ID must be unique' });
+                }
+                return res.status(500).json({ error: err.message });
+            }
             res.json({ success: true });
         });
     });
 
-    // Toggle status
+    // Toggle active status
     app.post(`/api/config/${type}/:id/toggle`, (req, res) => {
-        const sql = `UPDATE ${table} SET is_active = NOT is_active WHERE id = ?`;
+        const sql = `UPDATE ${table} 
+                    SET is_active = ((is_active | 1) - (is_active & 1)),
+                        updated_at = datetime('now', '+8 hours')
+                    WHERE id = ?`;
         
         db.run(sql, [req.params.id], function(err) {
             if (err) return res.status(500).json({ error: err.message });

@@ -13,10 +13,13 @@ CREATE TABLE IF NOT EXISTS ratings (
     is_submitted BOOLEAN DEFAULT 0
 );
 
+-- Customers table
 CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     created_at DATETIME DEFAULT (datetime('now', '+8 hours')),
+    updated_at DATETIME DEFAULT (datetime('now', '+8 hours')),
     is_active BOOLEAN DEFAULT 1
 );
 
