@@ -306,19 +306,23 @@ app.get(`/${ADMIN_PATH}/dashboard`, (req, res) => {
 });
 
 app.get(`/${ADMIN_PATH}/export-csv`, (req, res) => {
-    const sql = `SELECT 
-        invoice_number,
-        invoice_date,
-        customer_name,
-        service_name,
-        service_by,
-        rating,
-        review_text,
-        CASE WHEN is_submitted = 1 THEN 'Submitted' ELSE 'Pending' END as status,
-        created_at,
-        submitted_at
-        FROM ratings 
-        ORDER BY created_at DESC`;
+    const sql = `
+        SELECT 
+            r.invoice_number,
+            r.invoice_date,
+            c.name as customer_name,
+            s.name as service_name,
+            sp.name as service_by,
+            r.rating,
+            r.review_text,
+            CASE WHEN r.is_submitted = 1 THEN 'Submitted' ELSE 'Pending' END as status,
+            r.created_at,
+            r.submitted_at
+        FROM ratings r
+        LEFT JOIN customers c ON r.customer_id = c.id
+        LEFT JOIN services s ON r.service_id = s.id
+        LEFT JOIN service_providers sp ON r.service_provider_id = sp.id
+        ORDER BY r.created_at DESC`;
 
     db.all(sql, [], (err, ratings) => {
         if (err) {
