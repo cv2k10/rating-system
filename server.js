@@ -242,7 +242,12 @@ app.get(`/${ADMIN_PATH}/dashboard`, (req, res) => {
                 COUNT(*) as total,
                 SUM(CASE WHEN is_submitted = 1 THEN 1 ELSE 0 END) as submitted,
                 SUM(CASE WHEN is_submitted = 0 THEN 1 ELSE 0 END) as pending,
-                ROUND(AVG(CASE WHEN rating IS NOT NULL THEN rating ELSE 0 END), 1) as avg_rating
+                ROUND(AVG(CASE WHEN rating IS NOT NULL THEN rating ELSE 0 END), 1) as avg_rating,
+                SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as five_star,
+                SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as four_star,
+                SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as three_star,
+                SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as two_star,
+                SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as one_star
             ${baseQuery}
         `;
 
@@ -267,7 +272,12 @@ app.get(`/${ADMIN_PATH}/dashboard`, (req, res) => {
                 total: rawStats.total || 0,
                 submitted: rawStats.submitted || 0,
                 pending: rawStats.pending || 0,
-                avg_rating: rawStats.avg_rating || 0
+                avg_rating: rawStats.avg_rating || 0,
+                five_star: rawStats.five_star || 0,
+                four_star: rawStats.four_star || 0,
+                three_star: rawStats.three_star || 0,
+                two_star: rawStats.two_star || 0,
+                one_star: rawStats.one_star || 0
             };
 
             // Get ratings
