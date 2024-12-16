@@ -24,6 +24,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.log('Connected to the ratings database.');
 });
 
+// Enable foreign keys
+db.run('PRAGMA foreign_keys = ON');
+
 // Initialize database tables
 const initDb = () => {
     const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
@@ -91,8 +94,22 @@ async function getAndIncrementInvoiceNumber() {
     });
 }
 
+// Generate a random admin path if not set in .env
+const ADMIN_PATH = process.env.ADMIN_PATH || crypto.randomBytes(16).toString('hex');
+console.log('Admin path:', ADMIN_PATH); // Log this only during development
+
+// Debug middleware
+app.use((req, res, next) => {
+    console.log('Request URL:', req.url);
+    next();
+});
+
 // Routes
 app.get('/', (req, res) => {
+    res.render('index');
+});
+
+app.get(`/${ADMIN_PATH}`, (req, res) => {
     // Get customers
     db.all('SELECT id, name, customer_id, is_active FROM customers WHERE is_active = 1', [], (err, customers) => {
         if (err) {
@@ -128,7 +145,8 @@ app.get('/', (req, res) => {
                             services,
                             providers,
                             invoiceConfig,
-                            nextInvoiceNumber
+                            nextInvoiceNumber,
+                            adminPath: ADMIN_PATH
                         });
                     }).catch(err => {
                         console.error('Error getting invoice number:', err);
@@ -140,51 +158,42 @@ app.get('/', (req, res) => {
     });
 });
 
-app.get('/dashboard', (req, res) => {
+app.get(`/${ADMIN_PATH}/config`, (req, res) => {
+    // Get customers
+    db.all('SELECT * FROM customers ORDER BY name', [], (err, customers) => {
+        if (err) {
+            console.error('Error fetching customers:', err);
+            return res.status(500).send('Error loading page');
+        }
+
+        // Get services
+        db.all('SELECT * FROM services ORDER BY name', [], (err, services) => {
+            if (err) {
+                console.error('Error fetching services:', err);
+                return res.status(500).send('Error loading page');
+            }
+
+            // Get service providers
+            db.all('SELECT * FROM service_providers ORDER BY name', [], (err, providers) => {
+                if (err) {
+                    console.error('Error fetching providers:', err);
+                    return res.status(500).send('Error loading page');
+                }
+
+                res.render('config', {
+                    customers,
+                    services,
+                    providers,
+                    adminPath: ADMIN_PATH
+                });
+            });
+        });
+    });
+});
+
+app.get(`/${ADMIN_PATH}/dashboard`, (req, res) => {
     const { search, status, dateFrom, dateTo, serviceBy } = req.query;
     
-    let sql = `SELECT *, 
-               CASE 
-                   WHEN is_submitted = 0 
-                   THEN validation_token 
-                   ELSE NULL 
-               END as pending_token 
-               FROM ratings`;
-    let params = [];
-    let conditions = [];
-    
-    if (search) {
-        conditions.push(`(invoice_number LIKE ? OR customer_name LIKE ? OR service_name LIKE ? OR service_by LIKE ?)`);
-        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
-    }
-    
-    if (status === 'pending') {
-        conditions.push('is_submitted = 0');
-    } else if (status === 'submitted') {
-        conditions.push('is_submitted = 1');
-    }
-
-    if (serviceBy) {
-        conditions.push('service_by = ?');
-        params.push(serviceBy);
-    }
-    
-    if (dateFrom) {
-        conditions.push('date(created_at) >= date(?)');
-        params.push(dateFrom);
-    }
-    
-    if (dateTo) {
-        conditions.push('date(created_at) <= date(?)');
-        params.push(dateTo);
-    }
-    
-    if (conditions.length > 0) {
-        sql += ` WHERE ${conditions.join(' AND ')}`;
-    }
-    
-    sql += ` ORDER BY created_at DESC`;
-
     // Get statistics
     const statsQuery = `
         SELECT 
@@ -192,36 +201,103 @@ app.get('/dashboard', (req, res) => {
             SUM(CASE WHEN is_submitted = 1 THEN 1 ELSE 0 END) as submitted,
             SUM(CASE WHEN is_submitted = 0 THEN 1 ELSE 0 END) as pending,
             ROUND(AVG(CASE WHEN rating IS NOT NULL THEN rating ELSE 0 END), 1) as avg_rating
-        FROM ratings`;
+        FROM ratings
+    `;
 
-    db.get(statsQuery, [], (err, stats) => {
+    db.get(statsQuery, [], (err, rawStats) => {
         if (err) {
-            return res.status(500).render('error', { message: 'Database error' });
+            console.error('Error fetching stats:', err);
+            return res.status(500).send('Error loading page');
         }
+
+        // Ensure stats have default values
+        const stats = {
+            total: rawStats.total || 0,
+            submitted: rawStats.submitted || 0,
+            pending: rawStats.pending || 0,
+            avg_rating: rawStats.avg_rating || 0
+        };
+
+        let query = `
+            SELECT r.*, c.name as customer_name, c.customer_id as customer_id, s.name as service_name, sp.name as provider_name
+            FROM ratings r
+            LEFT JOIN customers c ON r.customer_id = c.id
+            LEFT JOIN services s ON r.service_id = s.id
+            LEFT JOIN service_providers sp ON r.service_provider_id = sp.id
+            WHERE 1=1
+        `;
         
-        db.all(sql, params, (err, ratings) => {
+        const params = [];
+
+        if (search) {
+            query += ` AND (c.name LIKE ? OR c.customer_id LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`);
+        }
+
+        if (status) {
+            query += ` AND r.is_submitted = ?`;
+            params.push(status === 'submitted' ? 1 : 0);
+        }
+
+        if (dateFrom) {
+            query += ` AND date(r.created_at) >= date(?)`;
+            params.push(dateFrom);
+        }
+
+        if (dateTo) {
+            query += ` AND date(r.created_at) <= date(?)`;
+            params.push(dateTo);
+        }
+
+        if (serviceBy) {
+            query += ` AND r.service_provider_id = ?`;
+            params.push(serviceBy);
+        }
+
+        query += ` ORDER BY r.created_at DESC`;
+
+        // Get service providers for filter
+        db.all('SELECT * FROM service_providers ORDER BY name', [], (err, providers) => {
             if (err) {
-                return res.status(500).render('error', { message: 'Database error' });
+                console.error('Error fetching providers:', err);
+                return res.status(500).send('Error loading page');
             }
 
-            // Convert dates to local format
-            ratings = ratings.map(rating => ({
-                ...rating,
-                invoice_date: rating.invoice_date ? new Date(rating.invoice_date).toLocaleDateString() : rating.invoice_date,
-                created_at: rating.created_at,
-                submitted_at: rating.submitted_at
-            }));
+            // Get ratings
+            db.all(query, params, (err, ratings) => {
+                if (err) {
+                    console.error('Error fetching ratings:', err);
+                    return res.status(500).send('Error loading page');
+                }
 
-            res.render('dashboard', { 
-                ratings,
-                stats,
-                filters: { search, status, dateFrom, dateTo, serviceBy }
+                res.render('dashboard', { 
+                    ratings,
+                    providers,
+                    stats,
+                    filters: {
+                        search: search || '',
+                        status: status || '',
+                        dateFrom: dateFrom || '',
+                        dateTo: dateTo || '',
+                        serviceBy: serviceBy || ''
+                    },
+                    adminPath: ADMIN_PATH,
+                    formatDate: (date) => {
+                        return new Date(date).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    }
+                });
             });
         });
     });
 });
 
-app.get('/export-csv', (req, res) => {
+app.get(`/${ADMIN_PATH}/export-csv`, (req, res) => {
     const sql = `SELECT 
         invoice_number,
         invoice_date,
@@ -271,52 +347,165 @@ app.get('/export-csv', (req, res) => {
     });
 });
 
-app.post('/generate-link', async (req, res) => {
-    const { invoice_number, invoice_date, customer_name, service_name, service_by } = req.body;
+// API endpoints for configuration
+app.post(`/${ADMIN_PATH}/api/generate`, async (req, res) => {
+    const { invoice_number, invoice_date, customer_id, service_id, service_provider_id } = req.body;
     
-    // Check if invoice number already exists
-    const checkSql = `SELECT COUNT(*) as count FROM ratings WHERE invoice_number = ?`;
-    db.get(checkSql, [invoice_number], async (err, result) => {
-        if (err) {
-            return res.status(500).json({ error: 'Database error' });
-        }
-        
-        if (result.count > 0) {
-            return res.status(400).json({ error: 'This invoice number already has a rating link generated' });
-        }
+    // Validate required fields
+    if (!invoice_number || !invoice_date || !customer_id || !service_id || !service_provider_id) {
+        return res.status(400).json({ error: 'All fields are required' });
+    }
 
-        // If using auto-generated numbers, get and increment the next number
-        if (!invoice_number) {
-            const nextNumber = await getAndIncrementInvoiceNumber();
-            if (!nextNumber) {
-                return res.status(400).json({ error: 'Failed to generate invoice number' });
-            }
-            req.body.invoice_number = nextNumber;
-        }
+    // Generate validation token
+    const validation_token = generateToken(invoice_number);
 
-        const validation_token = generateToken(req.body.invoice_number);
-        const formattedInvoiceDate = new Date(invoice_date).toISOString().split('T')[0];
-        
-        const sql = `INSERT INTO ratings (invoice_number, invoice_date, customer_name, service_name, service_by, validation_token) 
-                     VALUES (?, ?, ?, ?, ?, ?)`;
-        
-        db.run(sql, [req.body.invoice_number, formattedInvoiceDate, customer_name, service_name, service_by, validation_token], function(err) {
+    // Insert into database
+    const sql = `INSERT INTO ratings (
+        invoice_number, 
+        invoice_date, 
+        customer_id, 
+        service_id, 
+        service_provider_id, 
+        validation_token
+    ) VALUES (?, ?, ?, ?, ?, ?)`;
+
+    const params = [
+        invoice_number,
+        invoice_date,
+        customer_id,
+        service_id,
+        service_provider_id,
+        validation_token
+    ];
+
+    try {
+        db.run(sql, params, function(err) {
             if (err) {
-                return res.status(500).json({ error: err.message });
+                console.error('Error generating rating:', err);
+                return res.status(500).json({ error: 'Error generating rating' });
             }
             
-            const ratingUrl = `${req.protocol}://${req.get('host')}/rate?invoice=${req.body.invoice_number}&token=${validation_token}`;
+            const ratingUrl = `${req.protocol}://${req.get('host')}/rate/${validation_token}`;
             res.json({ url: ratingUrl });
         });
+    } catch (err) {
+        console.error('Error generating rating:', err);
+        res.status(500).json({ error: 'Error generating rating' });
+    }
+});
+
+// Special handler for customers
+app.post(`/${ADMIN_PATH}/api/config/customer`, (req, res) => {
+    const { name, customer_id } = req.body;
+    if (!name || !customer_id) {
+        return res.status(400).json({ error: 'Name and Customer ID are required' });
+    }
+
+    db.run('INSERT INTO customers (name, customer_id) VALUES (?, ?)', [name, customer_id], function(err) {
+        if (err) {
+            console.error('Error creating customer:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json({ id: this.lastID, name, customer_id });
     });
 });
 
-app.get('/rate', (req, res) => {
-    const { invoice, token } = req.query;
-    
-    const sql = `SELECT * FROM ratings WHERE invoice_number = ? AND validation_token = ? AND is_submitted = 0`;
-    db.get(sql, [invoice, token], (err, row) => {
+// Update customer
+app.put(`/${ADMIN_PATH}/api/config/customer/:id`, (req, res) => {
+    const { id } = req.params;
+    const { name, customer_id } = req.body;
+    if (!name || !customer_id) {
+        return res.status(400).json({ error: 'Name and Customer ID are required' });
+    }
+
+    db.run('UPDATE customers SET name = ?, customer_id = ? WHERE id = ?', [name, customer_id, id], (err) => {
         if (err) {
+            console.error('Error updating customer:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json({ success: true });
+    });
+});
+
+// Toggle customer active status
+app.post(`/${ADMIN_PATH}/api/config/customer/:id/toggle`, (req, res) => {
+    const { id } = req.params;
+    db.run('UPDATE customers SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?', [id], (err) => {
+        if (err) {
+            console.error('Error toggling customer:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json({ success: true });
+    });
+});
+
+// Generic CRUD operations for other config items
+const handleConfigItem = (type, table) => {
+    // Create
+    app.post(`/${ADMIN_PATH}/api/config/${type}`, (req, res) => {
+        const { name } = req.body;
+        if (!name) {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+
+        db.run(`INSERT INTO ${table} (name) VALUES (?)`, [name], function(err) {
+            if (err) {
+                console.error(`Error creating ${type}:`, err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json({ id: this.lastID, name });
+        });
+    });
+
+    // Update
+    app.put(`/${ADMIN_PATH}/api/config/${type}/:id`, (req, res) => {
+        const { id } = req.params;
+        const { name } = req.body;
+        if (!name) {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+
+        db.run(`UPDATE ${table} SET name = ? WHERE id = ?`, [name, id], (err) => {
+            if (err) {
+                console.error(`Error updating ${type}:`, err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json({ success: true });
+        });
+    });
+
+    // Toggle active status
+    app.post(`/${ADMIN_PATH}/api/config/${type}/:id/toggle`, (req, res) => {
+        const { id } = req.params;
+        db.run(`UPDATE ${table} SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?`, [id], (err) => {
+            if (err) {
+                console.error(`Error toggling ${type}:`, err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json({ success: true });
+        });
+    });
+};
+
+// Set up CRUD routes for each config type
+handleConfigItem('service', 'services');
+handleConfigItem('provider', 'service_providers');
+
+app.get('/rate/:token', (req, res) => {
+    const { token } = req.params;
+    
+    const sql = `
+        SELECT r.*, c.name as customer_name, s.name as service_name, sp.name as provider_name
+        FROM ratings r
+        LEFT JOIN customers c ON r.customer_id = c.id
+        LEFT JOIN services s ON r.service_id = s.id
+        LEFT JOIN service_providers sp ON r.service_provider_id = sp.id
+        WHERE r.validation_token = ? AND r.is_submitted = 0
+    `;
+    
+    db.get(sql, [token], (err, row) => {
+        if (err) {
+            console.error('Database error:', err);
             return res.status(500).render('error', { message: 'Database error' });
         }
         if (!row) {
@@ -327,15 +516,22 @@ app.get('/rate', (req, res) => {
 });
 
 app.post('/submit-rating', (req, res) => {
-    const { invoice_number, validation_token, rating, review_text } = req.body;
+    const { validation_token, rating, review_text } = req.body;
     
-    const sql = `UPDATE ratings 
-                 SET rating = ?, review_text = ?, is_submitted = 1, submitted_at = datetime('now', '+8 hours')
-                 WHERE invoice_number = ? AND validation_token = ? AND is_submitted = 0`;
+    const sql = `
+        UPDATE ratings 
+        SET rating = ?, 
+            review_text = ?, 
+            is_submitted = 1, 
+            submitted_at = datetime('now', '+8 hours')
+        WHERE validation_token = ? 
+        AND is_submitted = 0
+    `;
     
-    db.run(sql, [rating, review_text, invoice_number, validation_token], function(err) {
+    db.run(sql, [rating, review_text, validation_token], function(err) {
         if (err) {
-            return res.status(500).json({ error: err.message });
+            console.error('Error submitting rating:', err);
+            return res.status(500).json({ error: 'Database error' });
         }
         if (this.changes === 0) {
             return res.status(400).json({ error: 'Invalid submission or rating already submitted' });
@@ -343,116 +539,6 @@ app.post('/submit-rating', (req, res) => {
         res.json({ success: true });
     });
 });
-
-// Config page route
-app.get('/config', (req, res) => {
-    // Get customers
-    db.all('SELECT * FROM customers ORDER BY name', [], (err, customers) => {
-        if (err) {
-            console.error('Error fetching customers:', err);
-            return res.status(500).send('Error loading page');
-        }
-
-        // Get services
-        db.all('SELECT * FROM services ORDER BY name', [], (err, services) => {
-            if (err) {
-                console.error('Error fetching services:', err);
-                return res.status(500).send('Error loading page');
-            }
-
-            // Get service providers
-            db.all('SELECT * FROM service_providers ORDER BY name', [], (err, providers) => {
-                if (err) {
-                    console.error('Error fetching providers:', err);
-                    return res.status(500).send('Error loading page');
-                }
-
-                res.render('config', {
-                    customers,
-                    services,
-                    providers
-                });
-            });
-        });
-    });
-});
-
-// API endpoints for configuration
-app.post('/api/config/invoice', (req, res) => {
-    // Removed invoice configuration handling
-    res.json({ success: true });
-});
-
-// Generic CRUD operations for config items
-function handleConfigItem(type, table) {
-    // Create
-    app.post(`/api/config/${type}`, (req, res) => {
-        const { name, customer_id } = req.body;
-        let sql, params;
-        
-        if (type === 'customer') {
-            sql = `INSERT INTO ${table} (name, customer_id) VALUES (?, ?)`;
-            params = [name, customer_id];
-        } else {
-            sql = `INSERT INTO ${table} (name) VALUES (?)`;
-            params = [name];
-        }
-        
-        db.run(sql, params, function(err) {
-            if (err) {
-                console.error(err);
-                if (err.code === 'SQLITE_CONSTRAINT') {
-                    return res.status(400).json({ error: 'Customer ID must be unique' });
-                }
-                return res.status(500).json({ error: err.message });
-            }
-            res.json({ id: this.lastID });
-        });
-    });
-
-    // Update
-    app.put(`/api/config/${type}/:id`, (req, res) => {
-        const { name, customer_id } = req.body;
-        let sql, params;
-        
-        if (type === 'customer') {
-            sql = `UPDATE ${table} SET name = ?, customer_id = ?, updated_at = datetime('now', '+8 hours') WHERE id = ?`;
-            params = [name, customer_id, req.params.id];
-        } else {
-            sql = `UPDATE ${table} SET name = ?, updated_at = datetime('now', '+8 hours') WHERE id = ?`;
-            params = [name, req.params.id];
-        }
-        
-        db.run(sql, params, function(err) {
-            if (err) {
-                console.error(err);
-                if (err.code === 'SQLITE_CONSTRAINT') {
-                    return res.status(400).json({ error: 'Customer ID must be unique' });
-                }
-                return res.status(500).json({ error: err.message });
-            }
-            res.json({ success: true });
-        });
-    });
-
-    // Toggle active status
-    app.post(`/api/config/${type}/:id/toggle`, (req, res) => {
-        const sql = `UPDATE ${table} 
-                    SET is_active = ((is_active | 1) - (is_active & 1)),
-                        updated_at = datetime('now', '+8 hours')
-                    WHERE id = ?`;
-        
-        db.run(sql, [req.params.id], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        });
-    });
-}
-
-// Set up CRUD routes for each config type
-handleConfigItem('customer', 'customers');
-handleConfigItem('service', 'services');
-handleConfigItem('provider', 'service_providers');
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);

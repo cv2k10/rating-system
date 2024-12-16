@@ -10,6 +10,7 @@
         .container { max-width: 800px; margin-top: 50px; }
         .generated-url { word-break: break-all; }
         .nav-tabs { margin-bottom: 30px; }
+        .nav-tabs .nav-item:first-child { min-width: 150px; }
     </style>
 </head>
 <body>
@@ -17,13 +18,13 @@
         <nav>
             <ul class="nav nav-tabs">
                 <li class="nav-item">
-                    <a class="nav-link active" href="/">Generate Rating Link</a>
+                    <a class="nav-link active" href="/<%= adminPath %>">Generate Rating Link</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/dashboard">Ratings Dashboard</a>
+                    <a class="nav-link" href="/<%= adminPath %>/dashboard">Ratings Dashboard</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/config">Configuration</a>
+                    <a class="nav-link" href="/<%= adminPath %>/config">Configuration</a>
                 </li>
             </ul>
         </nav>
@@ -39,49 +40,33 @@
                 <input type="date" class="form-control" id="invoice_date" required>
             </div>
             <div class="mb-3">
-                <label for="customer_name" class="form-label">Customer</label>
-                <div class="input-group">
-                    <input type="text" class="form-control" id="customer_search" placeholder="Search by customer ID...">
-                    <select class="form-select" id="customer_name" required>
-                        <option value="">Select Customer</option>
-                        <% customers.forEach(customer => { %>
-                            <option value="<%= customer.name %>" 
-                                    data-customer-id="<%= customer.customer_id %>"
-                                    data-search-text="<%= customer.customer_id %> <%= customer.name %>">
-                                <%= customer.name %> (<%= customer.customer_id %>)
-                            </option>
-                        <% }); %>
-                    </select>
-                </div>
+                <label for="customer_id" class="form-label">Customer</label>
+                <select class="form-select" id="customer_id" required>
+                    <option value="">Select Customer</option>
+                    <% customers.forEach(customer => { %>
+                        <option value="<%= customer.id %>"><%= customer.customer_id %> - <%= customer.name %></option>
+                    <% }); %>
+                </select>
             </div>
             <div class="mb-3">
-                <label for="service_name" class="form-label">Service</label>
-                <select class="form-select" id="service_name" required>
+                <label for="service_id" class="form-label">Service</label>
+                <select class="form-select" id="service_id" required>
                     <option value="">Select Service</option>
                     <% services.forEach(service => { %>
-                        <% if (service.is_active) { %>
-                            <option value="<%= service.name %>"><%= service.name %></option>
-                        <% } %>
+                        <option value="<%= service.id %>"><%= service.name %></option>
                     <% }); %>
                 </select>
             </div>
             <div class="mb-3">
-                <label for="service_by" class="form-label">Service Provider</label>
-                <select class="form-select" id="service_by" required>
-                    <option value="">Select Service Provider</option>
+                <label for="service_provider_id" class="form-label">Service Provider</label>
+                <select class="form-select" id="service_provider_id" required>
+                    <option value="">Select Provider</option>
                     <% providers.forEach(provider => { %>
-                        <% if (provider.is_active) { %>
-                            <option value="<%= provider.name %>"><%= provider.name %></option>
-                        <% } %>
+                        <option value="<%= provider.id %>"><%= provider.name %></option>
                     <% }); %>
                 </select>
             </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary" id="generateBtn">Generate Rating Link</button>
-                <button type="button" class="btn btn-success d-none" id="nextBtn">
-                    <i class="fas fa-arrow-right"></i> Next Rating
-                </button>
-            </div>
+            <button type="submit" class="btn btn-primary" id="generateBtn">Generate Link</button>
         </form>
 
         <div id="error" class="alert alert-danger d-none"></div>
@@ -92,7 +77,7 @@
                 <p class="mb-2">Share this link with your customer:</p>
                 <div class="d-flex align-items-center gap-2">
                     <code id="generatedUrl" class="flex-grow-1" style="word-break: break-all;"></code>
-                    <button onclick="copyToClipboard()" class="btn btn-sm btn-outline-success">
+                    <button id="copyBtn" class="btn btn-sm btn-outline-success">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 </div>
@@ -104,154 +89,35 @@
         document.addEventListener('DOMContentLoaded', function() {
             const generateForm = document.getElementById('generateForm');
             const generateBtn = document.getElementById('generateBtn');
-            const nextBtn = document.getElementById('nextBtn');
-            const customerSearch = document.getElementById('customer_search');
-            const customerSelect = document.getElementById('customer_name');
             
-            // Store all customer options for filtering
-            const allCustomerOptions = Array.from(customerSelect.options).slice(1); // Skip the "Select Customer" option
-            
-            // Customer search functionality
-            customerSearch.addEventListener('input', function(e) {
-                const searchTerm = e.target.value.toLowerCase().trim();
-                updateCustomerOptions(searchTerm);
-            });
-
-            // Function to update customer options based on search term
-            function updateCustomerOptions(searchTerm) {
-                // Clear current options (except the first one)
-                while (customerSelect.options.length > 1) {
-                    customerSelect.remove(1);
-                }
-                
-                // Filter and add matching options
-                allCustomerOptions.forEach(option => {
-                    const searchText = option.getAttribute('data-search-text').toLowerCase();
-                    if (searchText.includes(searchTerm)) {
-                        customerSelect.add(option.cloneNode(true));
-                    }
-                });
-
-                // If no matches found, show a "No results" option
-                if (customerSelect.options.length === 1 && searchTerm !== '') {
-                    const noResults = new Option('No matching customers found', '');
-                    noResults.disabled = true;
-                    customerSelect.add(noResults);
-                }
-
-                // If only one match is found (excluding the placeholder options), auto-select it
-                if (customerSelect.options.length === 2 && searchTerm !== '') {
-                    customerSelect.selectedIndex = 1;
-                }
-            }
-
-            // Handle customer select change
-            customerSelect.addEventListener('change', function() {
-                if (this.value) {
-                    const selectedOption = this.options[this.selectedIndex];
-                    const customerId = selectedOption.getAttribute('data-customer-id');
-                    customerSearch.value = customerId;
-                }
-            });
-
-            // Save form data
-            function saveFormData() {
-                const formData = {
-                    invoice_number: document.getElementById('invoice_number').value,
-                    invoice_date: document.getElementById('invoice_date').value,
-                    customer_name: document.getElementById('customer_name').value,
-                    customer_search: document.getElementById('customer_search').value,
-                    service_name: document.getElementById('service_name').value,
-                    service_by: document.getElementById('service_by').value
-                };
-                localStorage.setItem('formData', JSON.stringify(formData));
-            }
-
-            // Load saved form data
-            const savedData = localStorage.getItem('formData');
-            if (savedData) {
-                const data = JSON.parse(savedData);
-                Object.keys(data).forEach(key => {
-                    const element = document.getElementById(key);
-                    if (element) {
-                        element.value = data[key];
-                        if (key === 'customer_search') {
-                            updateCustomerOptions(data[key].toLowerCase().trim());
-                        }
-                    }
-                });
-            }
-
-            // Save form data when any input changes
-            generateForm.addEventListener('change', saveFormData);
-            customerSearch.addEventListener('input', saveFormData);
-
-            // Load saved form data and rating link on page load
-            const savedRatingUrl = localStorage.getItem('lastGeneratedUrl');
-            if (savedRatingUrl) {
-                showGeneratedLink(JSON.parse(savedRatingUrl).url);
-                showNextButton();
-            }
-
-            // Next button handler
-            nextBtn.addEventListener('click', function() {
-                // Clear the previous result and generated URL
-                document.getElementById('result').classList.add('d-none');
-                localStorage.removeItem('lastGeneratedUrl');
-                nextBtn.classList.add('d-none');
-                generateBtn.disabled = false;
-                
-                // Clear all form inputs including invoice number
-                document.getElementById('invoice_number').value = '';
-                document.getElementById('invoice_date').value = '';
-                document.getElementById('customer_name').value = '';
-                document.getElementById('customer_search').value = '';
-                document.getElementById('service_name').value = '';
-                document.getElementById('service_by').value = '';
-                
-                // Save the cleared form state
-                saveFormData();
-            });
-
-            generateForm.addEventListener('submit', async (e) => {
+            generateForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
+                generateBtn.disabled = true;
                 
-                const formData = {
-                    invoice_number: document.getElementById('invoice_number').value,
-                    invoice_date: document.getElementById('invoice_date').value,
-                    customer_name: document.getElementById('customer_name').value,
-                    service_name: document.getElementById('service_name').value,
-                    service_by: document.getElementById('service_by').value
-                };
-
                 try {
-                    document.getElementById('error').classList.add('d-none');
-                    generateBtn.disabled = true;
-
-                    const response = await fetch('/generate-link', {
+                    const response = await fetch('/<%= adminPath %>/api/generate', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify(formData)
+                        body: JSON.stringify({
+                            invoice_number: document.getElementById('invoice_number').value,
+                            invoice_date: document.getElementById('invoice_date').value,
+                            customer_id: document.getElementById('customer_id').value,
+                            service_id: document.getElementById('service_id').value,
+                            service_provider_id: document.getElementById('service_provider_id').value
+                        })
                     });
-
+                    
                     const data = await response.json();
                     if (!response.ok) {
-                        throw new Error(data.error || 'Error generating link');
+                        throw new Error(data.error || 'Failed to generate link');
                     }
-
-                    if (data.url) {
-                        // Save the URL separately from form data
-                        localStorage.setItem('lastGeneratedUrl', JSON.stringify({ url: data.url }));
-                        showGeneratedLink(data.url);
-                        showNextButton();
-                    }
+                    
+                    showGeneratedLink(data.url);
                 } catch (error) {
-                    console.error('Error:', error);
-                    const errorDiv = document.getElementById('error');
-                    errorDiv.textContent = error.message;
-                    errorDiv.classList.remove('d-none');
+                    alert(error.message);
+                } finally {
                     generateBtn.disabled = false;
                 }
             });
@@ -260,18 +126,11 @@
         function showGeneratedLink(url) {
             const resultDiv = document.getElementById('result');
             document.getElementById('generatedUrl').textContent = url;
+            document.getElementById('copyBtn').onclick = () => {
+                navigator.clipboard.writeText(url);
+                alert('URL copied to clipboard!');
+            };
             resultDiv.classList.remove('d-none');
-        }
-
-        function showNextButton() {
-            document.getElementById('nextBtn').classList.remove('d-none');
-        }
-
-        function copyToClipboard() {
-            const url = document.getElementById('generatedUrl').textContent;
-            navigator.clipboard.writeText(url)
-                .then(() => alert('Link copied to clipboard!'))
-                .catch(err => console.error('Error copying text:', err));
         }
     </script>
 </body>

@@ -2,15 +2,18 @@ CREATE TABLE IF NOT EXISTS ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     invoice_number TEXT NOT NULL,
     invoice_date TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    service_name TEXT NOT NULL,
-    service_by TEXT NOT NULL,
+    customer_id INTEGER,
+    service_id INTEGER,
+    service_provider_id INTEGER,
     validation_token TEXT NOT NULL,
     rating INTEGER,
     review_text TEXT,
     created_at DATETIME DEFAULT (datetime('now', '+8 hours')),
     submitted_at DATETIME,
-    is_submitted BOOLEAN DEFAULT 0
+    is_submitted BOOLEAN DEFAULT 0,
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (service_id) REFERENCES services(id),
+    FOREIGN KEY (service_provider_id) REFERENCES service_providers(id)
 );
 
 -- Customers table

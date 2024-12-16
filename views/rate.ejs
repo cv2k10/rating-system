@@ -26,7 +26,7 @@
                 <div class="col-md-6">
                     <p><strong>Customer Name:</strong> <%= rating.customer_name %></p>
                     <p><strong>Service:</strong> <%= rating.service_name %></p>
-                    <p><strong>Serviced by:</strong> <%= rating.service_by %></p>
+                    <p><strong>Serviced by:</strong> <%= rating.provider_name %></p>
                 </div>
             </div>
         </div>
@@ -96,7 +96,6 @@
             }
 
             const formData = {
-                invoice_number: document.getElementById('invoice_number').value,
                 validation_token: document.getElementById('validation_token').value,
                 rating: selectedRating,
                 review_text: document.getElementById('review').value

@@ -26,13 +26,13 @@
         <nav>
             <ul class="nav nav-tabs">
                 <li class="nav-item">
-                    <a class="nav-link" href="/">Generate Rating Link</a>
+                    <a class="nav-link" href="/<%= adminPath %>">Generate Rating Link</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/dashboard">Ratings Dashboard</a>
+                    <a class="nav-link" href="/<%= adminPath %>/dashboard">Ratings Dashboard</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link active" href="/config">Configuration</a>
+                    <a class="nav-link active" href="/<%= adminPath %>/config">Configuration</a>
                 </li>
             </ul>
         </nav>
@@ -228,8 +228,8 @@
 
             try {
                 const url = id 
-                    ? `/api/config/${type}/${id}`
-                    : `/api/config/${type}`;
+                    ? `/<%= adminPath %>/api/config/${type}/${id}`
+                    : `/<%= adminPath %>/api/config/${type}`;
                 
                 const response = await fetch(url, {
                     method: id ? 'PUT' : 'POST',
@@ -253,7 +253,7 @@
             if (!confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'activate'} this item?`)) return;
 
             try {
-                const response = await fetch(`/api/config/${type}/${id}/toggle`, {
+                const response = await fetch(`/<%= adminPath %>/api/config/${type}/${id}/toggle`, {
                     method: 'POST'
                 });
 
