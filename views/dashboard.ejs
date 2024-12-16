@@ -64,6 +64,47 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            position: relative;
+            padding-right: 20px !important;
+        }
+        .sort-icons {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: inline-block;
+            width: 12px;
+            height: 20px;
+        }
+        .sort-icons i {
+            position: absolute;
+            left: 0;
+            font-size: 0.9em;
+            color: #ccc;
+            display: none;
+        }
+        .sort-icons i.fa-sort {
+            display: inline-block;
+        }
+        .sortable.asc .sort-icons i.fa-sort-up {
+            display: inline-block;
+            color: #000;
+        }
+        .sortable.desc .sort-icons i.fa-sort-down {
+            display: inline-block;
+            color: #000;
+        }
+        .sortable.asc .sort-icons i.fa-sort,
+        .sortable.desc .sort-icons i.fa-sort {
+            display: none;
+        }
+        .sortable:hover .sort-icons i {
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -120,7 +161,7 @@
             <form id="filterForm" method="GET">
                 <div class="row g-3">
                     <div class="col-md-3">
-                        <input type="text" class="form-control" name="search" placeholder="Search..." value="<%= filters.search || '' %>">
+                        <input type="text" class="form-control" name="search" placeholder="Search by customer name, ID, or invoice..." value="<%= filters.search || '' %>">
                     </div>
                     <div class="col-md-2">
                         <select class="form-select" name="status">
@@ -130,56 +171,124 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <input type="date" class="form-control" name="dateFrom" value="<%= filters.dateFrom || '' %>" placeholder="From Date">
+                        <input type="date" class="form-control" name="dateFrom" value="<%= filters.dateFrom || '' %>" placeholder="Invoice Date From">
                     </div>
                     <div class="col-md-2">
-                        <input type="date" class="form-control" name="dateTo" value="<%= filters.dateTo || '' %>" placeholder="To Date">
+                        <input type="date" class="form-control" name="dateTo" value="<%= filters.dateTo || '' %>" placeholder="Invoice Date To">
                     </div>
                     <div class="col-md-2">
                         <select class="form-select" name="serviceBy">
                             <option value="">All Service Providers</option>
-                            <% 
-                            // Get unique service providers
-                            const serviceProviders = [...new Set(ratings.map(r => r.service_by))].sort();
-                            serviceProviders.forEach(provider => { 
-                            %>
-                                <option value="<%= provider %>" <%= filters.serviceBy === provider ? 'selected' : '' %>><%= provider %></option>
+                            <% providers.forEach(provider => { %>
+                                <option value="<%= provider.name %>" <%= filters.serviceBy === provider.name ? 'selected' : '' %>><%= provider.name %></option>
                             <% }); %>
                         </select>
                     </div>
-                    <div class="col-md-3">
-                        <button type="submit" class="btn btn-primary me-2">Apply Filters</button>
-                        <a href="/<%= adminPath %>/dashboard" class="btn btn-secondary">Reset</a>
+                    <div class="col-md-1">
+                        <button type="submit" class="btn btn-primary">Filter</button>
                     </div>
                 </div>
             </form>
+            <div class="mt-2">
+                <a href="/<%= adminPath %>/dashboard" class="btn btn-outline-secondary btn-sm">Reset Filters</a>
+            </div>
         </div>
 
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>Invoice #</th>
-                        <th>Date</th>
-                        <th>Customer</th>
-                        <th>Service</th>
-                        <th>Service By</th>
-                        <th>Rating</th>
-                        <th>Review</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                        <th>Submitted</th>
+                        <th class="sortable" data-sort="invoice">
+                            Invoice #
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="date">
+                            Date
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="customer">
+                            Customer
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="service">
+                            Service
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="provider">
+                            Service By
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="rating">
+                            Rating
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="review">
+                            Review
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="status">
+                            Status
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="created">
+                            Created
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
+                        <th class="sortable" data-sort="submitted">
+                            Submitted
+                            <span class="sort-icons">
+                                <i class="fas fa-sort"></i>
+                                <i class="fas fa-sort-up"></i>
+                                <i class="fas fa-sort-down"></i>
+                            </span>
+                        </th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="ratingsTableBody">
                     <% ratings.forEach(rating => { %>
                         <tr>
-                            <td><%= rating.invoice_number %></td>
-                            <td><%= rating.invoice_date %></td>
-                            <td><%= rating.customer_name %></td>
-                            <td><%= rating.service_name %></td>
-                            <td><%= rating.service_by %></td>
-                            <td>
+                            <td data-value="<%= rating.invoice_number %>"><%= rating.invoice_number %></td>
+                            <td data-value="<%= rating.invoice_date %>"><%= rating.invoice_date %></td>
+                            <td data-value="<%= rating.customer_name %>"><%= rating.customer_name %></td>
+                            <td data-value="<%= rating.service_name %>"><%= rating.service_name %></td>
+                            <td data-value="<%= rating.provider_name %>"><%= rating.provider_name %></td>
+                            <td data-value="<%= rating.rating || 0 %>">
                                 <% if (rating.rating) { %>
                                     <div class="rating-stars">
                                         <% for(let i = 1; i <= 5; i++) { %>
@@ -190,7 +299,7 @@
                                     -
                                 <% } %>
                             </td>
-                            <td>
+                            <td data-value="<%= rating.review_text || '' %>">
                                 <% if (rating.review_text) { %>
                                     <div class="review-text" title="<%= rating.review_text %>">
                                         <%= rating.review_text %>
@@ -199,7 +308,7 @@
                                     -
                                 <% } %>
                             </td>
-                            <td>
+                            <td data-value="<%= rating.is_submitted ? 'submitted' : 'pending' %>">
                                 <% if (!rating.is_submitted) { %>
                                     <a href="/rate/<%= rating.validation_token %>" 
                                        class="status-badge status-pending text-decoration-none" 
@@ -212,17 +321,11 @@
                                     </span>
                                 <% } %>
                             </td>
-                            <td><%= new Date(rating.created_at.replace(' ', 'T') + '+08:00').toLocaleString('en-US', { 
-                                dateStyle: 'medium', 
-                                timeStyle: 'medium',
-                                timeZone: 'Asia/Singapore'
-                            }) %></td>
-                            <td>
-                                <%= rating.submitted_at ? new Date(rating.submitted_at.replace(' ', 'T') + '+08:00').toLocaleString('en-US', { 
-                                    dateStyle: 'medium', 
-                                    timeStyle: 'medium',
-                                    timeZone: 'Asia/Singapore'
-                                }) : '-' %>
+                            <td data-value="<%= rating.created_at %>">
+                                <%= formatDate(rating.created_at) %>
+                            </td>
+                            <td data-value="<%= rating.submitted_at || '' %>">
+                                <%= rating.submitted_at ? formatDate(rating.submitted_at) : '-' %>
                             </td>
                         </tr>
                     <% }); %>
@@ -232,5 +335,69 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            let currentSort = { column: 'date', direction: 'desc' };
+
+            function sortTable(column, initialSort = false) {
+                const tbody = document.getElementById('ratingsTableBody');
+                const rows = Array.from(tbody.getElementsByTagName('tr'));
+                
+                // Get column index
+                const headers = document.querySelectorAll('th.sortable');
+                const columnIndex = Array.from(headers).findIndex(th => th.dataset.sort === column);
+                
+                // Update sort direction
+                if (!initialSort && currentSort.column === column) {
+                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort = { column: column, direction: initialSort ? 'desc' : 'asc' };
+                }
+
+                // Update sort icons
+                document.querySelectorAll('.sortable').forEach(th => {
+                    th.classList.remove('asc', 'desc');
+                    if (th.dataset.sort === column) {
+                        th.classList.add(currentSort.direction);
+                    }
+                });
+
+                // Sort rows
+                rows.sort((a, b) => {
+                    const aCell = a.getElementsByTagName('td')[columnIndex];
+                    const bCell = b.getElementsByTagName('td')[columnIndex];
+                    const aValue = aCell.getAttribute('data-value');
+                    const bValue = bCell.getAttribute('data-value');
+                    
+                    // Handle numeric values
+                    if (column === 'rating') {
+                        return (parseFloat(aValue || 0) - parseFloat(bValue || 0)) * (currentSort.direction === 'asc' ? 1 : -1);
+                    }
+                    
+                    // Handle date values
+                    if (['date', 'created', 'submitted'].includes(column)) {
+                        const aDate = aValue ? new Date(aValue) : new Date(0);
+                        const bDate = bValue ? new Date(bValue) : new Date(0);
+                        return (aDate - bDate) * (currentSort.direction === 'asc' ? 1 : -1);
+                    }
+                    
+                    // Handle text values
+                    return String(aValue || '').localeCompare(String(bValue || '')) * (currentSort.direction === 'asc' ? 1 : -1);
+                });
+
+                // Reorder table
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            // Add click handlers to sortable columns
+            document.querySelectorAll('.sortable').forEach(th => {
+                th.addEventListener('click', () => sortTable(th.dataset.sort));
+            });
+
+            // Initial sort by date in descending order
+            sortTable('date', true);
+        });
+    </script>
 </body>
 </html>

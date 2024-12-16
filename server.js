@@ -194,32 +194,14 @@ app.get(`/${ADMIN_PATH}/config`, (req, res) => {
 app.get(`/${ADMIN_PATH}/dashboard`, (req, res) => {
     const { search, status, dateFrom, dateTo, serviceBy } = req.query;
     
-    // Get statistics
-    const statsQuery = `
-        SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN is_submitted = 1 THEN 1 ELSE 0 END) as submitted,
-            SUM(CASE WHEN is_submitted = 0 THEN 1 ELSE 0 END) as pending,
-            ROUND(AVG(CASE WHEN rating IS NOT NULL THEN rating ELSE 0 END), 1) as avg_rating
-        FROM ratings
-    `;
-
-    db.get(statsQuery, [], (err, rawStats) => {
+    // Get service providers for filter
+    db.all('SELECT * FROM service_providers WHERE is_active = 1 ORDER BY name', [], (err, providers) => {
         if (err) {
-            console.error('Error fetching stats:', err);
+            console.error('Error fetching providers:', err);
             return res.status(500).send('Error loading page');
         }
 
-        // Ensure stats have default values
-        const stats = {
-            total: rawStats.total || 0,
-            submitted: rawStats.submitted || 0,
-            pending: rawStats.pending || 0,
-            avg_rating: rawStats.avg_rating || 0
-        };
-
-        let query = `
-            SELECT r.*, c.name as customer_name, c.customer_id as customer_id, s.name as service_name, sp.name as provider_name
+        let baseQuery = `
             FROM ratings r
             LEFT JOIN customers c ON r.customer_id = c.id
             LEFT JOIN services s ON r.service_id = s.id
@@ -230,41 +212,66 @@ app.get(`/${ADMIN_PATH}/dashboard`, (req, res) => {
         const params = [];
 
         if (search) {
-            query += ` AND (c.name LIKE ? OR c.customer_id LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`);
+            baseQuery += ` AND (c.name LIKE ? OR c.customer_id LIKE ? OR r.invoice_number LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         if (status) {
-            query += ` AND r.is_submitted = ?`;
+            baseQuery += ` AND r.is_submitted = ?`;
             params.push(status === 'submitted' ? 1 : 0);
         }
 
         if (dateFrom) {
-            query += ` AND date(r.created_at) >= date(?)`;
+            baseQuery += ` AND date(r.invoice_date) >= date(?)`;
             params.push(dateFrom);
         }
 
         if (dateTo) {
-            query += ` AND date(r.created_at) <= date(?)`;
+            baseQuery += ` AND date(r.invoice_date) <= date(?)`;
             params.push(dateTo);
         }
 
         if (serviceBy) {
-            query += ` AND r.service_provider_id = ?`;
+            baseQuery += ` AND sp.name = ?`;
             params.push(serviceBy);
         }
 
-        query += ` ORDER BY r.created_at DESC`;
+        // Get statistics based on filtered results
+        const statsQuery = `
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN is_submitted = 1 THEN 1 ELSE 0 END) as submitted,
+                SUM(CASE WHEN is_submitted = 0 THEN 1 ELSE 0 END) as pending,
+                ROUND(AVG(CASE WHEN rating IS NOT NULL THEN rating ELSE 0 END), 1) as avg_rating
+            ${baseQuery}
+        `;
 
-        // Get service providers for filter
-        db.all('SELECT * FROM service_providers ORDER BY name', [], (err, providers) => {
+        // Get ratings with the same filter
+        const ratingsQuery = `
+            SELECT r.*, c.name as customer_name, c.customer_id as customer_id, 
+                   s.name as service_name, sp.name as provider_name,
+                   r.validation_token
+            ${baseQuery}
+            ORDER BY r.created_at DESC
+        `;
+
+        // Execute both queries
+        db.get(statsQuery, params, (err, rawStats) => {
             if (err) {
-                console.error('Error fetching providers:', err);
+                console.error('Error fetching stats:', err);
                 return res.status(500).send('Error loading page');
             }
 
+            // Ensure stats have default values
+            const stats = {
+                total: rawStats.total || 0,
+                submitted: rawStats.submitted || 0,
+                pending: rawStats.pending || 0,
+                avg_rating: rawStats.avg_rating || 0
+            };
+
             // Get ratings
-            db.all(query, params, (err, ratings) => {
+            db.all(ratingsQuery, params, (err, ratings) => {
                 if (err) {
                     console.error('Error fetching ratings:', err);
                     return res.status(500).send('Error loading page');
@@ -283,12 +290,13 @@ app.get(`/${ADMIN_PATH}/dashboard`, (req, res) => {
                     },
                     adminPath: ADMIN_PATH,
                     formatDate: (date) => {
-                        return new Date(date).toLocaleString('en-US', {
+                        return new Date(date.replace(' ', 'T') + '+08:00').toLocaleString('en-US', {
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric',
                             hour: '2-digit',
-                            minute: '2-digit'
+                            minute: '2-digit',
+                            timeZone: 'Asia/Singapore'
                         });
                     }
                 });
