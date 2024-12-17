@@ -102,7 +102,10 @@
                     <% }); %>
                 </select>
             </div>
-            <button type="submit" class="btn btn-primary" id="generateBtn">Generate Link</button>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="generateBtn">Generate Link</button>
+                <button type="button" class="btn btn-outline-secondary" id="clearBtn">Clear</button>
+            </div>
         </form>
 
         <div id="error" class="alert alert-danger d-none"></div>
@@ -135,24 +138,42 @@
 
             const generateForm = document.getElementById('generateForm');
             const generateBtn = document.getElementById('generateBtn');
+            const clearBtn = document.getElementById('clearBtn');
             
+            // Restore saved form data and generated link
+            const savedData = JSON.parse(localStorage.getItem('ratingFormData') || '{}');
+            if (savedData.invoice_number) {
+                document.getElementById('invoice_number').value = savedData.invoice_number;
+                document.getElementById('invoice_date').value = savedData.invoice_date;
+                // Initialize Select2 with saved value
+                $('#customer_id').val(savedData.customer_id).trigger('change');
+                document.getElementById('service_id').value = savedData.service_id;
+                document.getElementById('service_provider_id').value = savedData.service_provider_id;
+                
+                if (savedData.generatedUrl) {
+                    showGeneratedLink(savedData.generatedUrl);
+                }
+            }
+
             generateForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 generateBtn.disabled = true;
                 
                 try {
+                    const formData = {
+                        invoice_number: document.getElementById('invoice_number').value,
+                        invoice_date: document.getElementById('invoice_date').value,
+                        customer_id: document.getElementById('customer_id').value,
+                        service_id: document.getElementById('service_id').value,
+                        service_provider_id: document.getElementById('service_provider_id').value
+                    };
+
                     const response = await fetch('/<%= adminPath %>/api/generate', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({
-                            invoice_number: document.getElementById('invoice_number').value,
-                            invoice_date: document.getElementById('invoice_date').value,
-                            customer_id: document.getElementById('customer_id').value,
-                            service_id: document.getElementById('service_id').value,
-                            service_provider_id: document.getElementById('service_provider_id').value
-                        })
+                        body: JSON.stringify(formData)
                     });
                     
                     const data = await response.json();
@@ -160,12 +181,31 @@
                         throw new Error(data.error || 'Failed to generate link');
                     }
                     
+                    // Save form data and generated URL
+                    localStorage.setItem('ratingFormData', JSON.stringify({
+                        ...formData,
+                        generatedUrl: data.url
+                    }));
+                    
                     showGeneratedLink(data.url);
                 } catch (error) {
                     alert(error.message);
                 } finally {
                     generateBtn.disabled = false;
                 }
+            });
+
+            clearBtn.addEventListener('click', function() {
+                // Clear form fields
+                document.getElementById('invoice_number').value = '';
+                document.getElementById('invoice_date').value = '';
+                $('#customer_id').val(null).trigger('change');
+                document.getElementById('service_id').value = '';
+                document.getElementById('service_provider_id').value = '';
+                document.getElementById('result').classList.add('d-none');
+                
+                // Clear localStorage
+                localStorage.removeItem('ratingFormData');
             });
         });
 
