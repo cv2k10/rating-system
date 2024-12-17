@@ -158,6 +158,8 @@
             generateForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 generateBtn.disabled = true;
+                const errorDiv = document.getElementById('error');
+                errorDiv.classList.add('d-none');
                 
                 try {
                     const formData = {
@@ -189,7 +191,8 @@
                     
                     showGeneratedLink(data.url);
                 } catch (error) {
-                    alert(error.message);
+                    errorDiv.textContent = error.message;
+                    errorDiv.classList.remove('d-none');
                 } finally {
                     generateBtn.disabled = false;
                 }

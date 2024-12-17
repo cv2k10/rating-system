@@ -378,29 +378,41 @@ app.post(`/${ADMIN_PATH}/api/generate`, async (req, res) => {
         return res.status(400).json({ error: 'All fields are required' });
     }
 
-    // Generate validation token
-    const validation_token = generateToken(invoice_number);
+    // Check for duplicate invoice number
+    const checkSql = `SELECT COUNT(*) as count FROM ratings WHERE invoice_number = ?`;
+    
+    db.get(checkSql, [invoice_number], (err, row) => {
+        if (err) {
+            console.error('Error checking invoice number:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        if (row.count > 0) {
+            return res.status(400).json({ error: 'Invoice number already exists' });
+        }
+        
+        // Generate validation token
+        const validation_token = generateToken(invoice_number);
 
-    // Insert into database
-    const sql = `INSERT INTO ratings (
-        invoice_number, 
-        invoice_date, 
-        customer_id, 
-        service_id, 
-        service_provider_id, 
-        validation_token
-    ) VALUES (?, ?, ?, ?, ?, ?)`;
+        // Insert into database
+        const sql = `INSERT INTO ratings (
+            invoice_number, 
+            invoice_date, 
+            customer_id, 
+            service_id, 
+            service_provider_id, 
+            validation_token
+        ) VALUES (?, ?, ?, ?, ?, ?)`;
 
-    const params = [
-        invoice_number,
-        invoice_date,
-        customer_id,
-        service_id,
-        service_provider_id,
-        validation_token
-    ];
+        const params = [
+            invoice_number,
+            invoice_date,
+            customer_id,
+            service_id,
+            service_provider_id,
+            validation_token
+        ];
 
-    try {
         db.run(sql, params, function(err) {
             if (err) {
                 console.error('Error generating rating:', err);
@@ -410,10 +422,7 @@ app.post(`/${ADMIN_PATH}/api/generate`, async (req, res) => {
             const ratingUrl = `${req.protocol}://${req.get('host')}/rate/${validation_token}`;
             res.json({ url: ratingUrl });
         });
-    } catch (err) {
-        console.error('Error generating rating:', err);
-        res.status(500).json({ error: 'Error generating rating' });
-    }
+    });
 });
 
 // Special handler for customers
