@@ -30,10 +30,44 @@
             color: #333;
             margin: 0;
         }
+        .qr-code-container {
+            text-align: center;
+            padding-left: 20px;
+            border-left: 1px solid #d1e7dd;
+        }
+        .qr-code-container canvas {
+            width: 120px !important;
+            height: 120px !important;
+        }
+        .result-content {
+            display: flex;
+            align-items: center;
+        }
+        .link-container {
+            flex: 1;
+            min-width: 0; /* Prevents flex item from overflowing */
+        }
+        .qr-hint {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+            margin-bottom: 0;
+        }
         @media (max-width: 768px) {
             .tab-text { display: none; }
             .tab-icon { margin: 0; }
             .nav-tabs .nav-item:first-child { min-width: auto; }
+            .result-content {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .qr-code-container {
+                margin-top: 15px;
+                padding-left: 0;
+                padding-top: 15px;
+                border-left: none;
+                border-top: 1px solid #d1e7dd;
+            }
         }
     </style>
 </head>
@@ -112,21 +146,31 @@
 
         <div id="result" class="d-none">
             <div class="alert alert-success">
-                <h4 class="alert-heading">Rating Link Generated!</h4>
-                <p class="mb-2">Share this link with your customer:</p>
-                <div class="d-flex align-items-center gap-2">
-                    <code id="generatedUrl" class="flex-grow-1" style="word-break: break-all;"></code>
-                    <button id="copyBtn" class="btn btn-sm btn-outline-success">
-                        <i class="fas fa-copy"></i> Copy
-                    </button>
+                <h4 class="alert-heading">Customer Rating Page Generated</h4>
+                <div class="result-content">
+                    <div class="link-container">
+                        <p class="mb-2">Share this link with your customer:</p>
+                        <div class="d-flex align-items-center gap-2 mb-0">
+                            <code id="generatedUrl" class="flex-grow-1" style="word-break: break-all;"></code>
+                            <button id="copyBtn" class="btn btn-sm btn-outline-success">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+                    <div class="qr-code-container">
+                        <div id="qrCode"></div>
+                        <p class="qr-hint">Scan with phone camera</p>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize Select2
@@ -139,6 +183,7 @@
             const generateForm = document.getElementById('generateForm');
             const generateBtn = document.getElementById('generateBtn');
             const clearBtn = document.getElementById('clearBtn');
+            const qrCodeContainer = document.querySelector('.qr-code-container');
             
             // Restore saved form data and generated link
             const savedData = JSON.parse(localStorage.getItem('ratingFormData') || '{}');
@@ -160,6 +205,7 @@
                 generateBtn.disabled = true;
                 const errorDiv = document.getElementById('error');
                 errorDiv.classList.add('d-none');
+                qrCodeContainer.style.display = 'none';
                 
                 try {
                     const formData = {
@@ -206,6 +252,12 @@
                 document.getElementById('service_id').value = '';
                 document.getElementById('service_provider_id').value = '';
                 document.getElementById('result').classList.add('d-none');
+                document.getElementById('error').classList.add('d-none');
+                
+                // Clear QR code
+                const qrCode = document.getElementById('qrCode');
+                qrCode.innerHTML = '';
+                qrCodeContainer.style.display = 'none';
                 
                 // Clear localStorage
                 localStorage.removeItem('ratingFormData');
@@ -214,12 +266,34 @@
 
         function showGeneratedLink(url) {
             const resultDiv = document.getElementById('result');
+            const qrCodeContainer = document.querySelector('.qr-code-container');
             document.getElementById('generatedUrl').textContent = url;
             document.getElementById('copyBtn').onclick = () => {
                 navigator.clipboard.writeText(url);
                 alert('URL copied to clipboard!');
             };
-            resultDiv.classList.remove('d-none');
+            
+            // Generate QR code
+            const qrCode = document.getElementById('qrCode');
+            qrCode.innerHTML = ''; // Clear previous QR code
+            
+            try {
+                new QRCode(qrCode, {
+                    text: url,
+                    width: 200,
+                    height: 200,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                
+                // Show containers
+                resultDiv.classList.remove('d-none');
+                qrCodeContainer.style.display = 'block';
+            } catch (error) {
+                console.error('Error generating QR code:', error);
+                qrCodeContainer.style.display = 'none';
+            }
         }
     </script>
 </body>
