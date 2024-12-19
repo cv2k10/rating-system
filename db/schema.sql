@@ -40,6 +40,28 @@ CREATE TABLE IF NOT EXISTS service_providers (
     is_active BOOLEAN DEFAULT 1
 );
 
+-- Rating Questions table
+CREATE TABLE IF NOT EXISTS rating_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    question TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT (datetime('now', '+8 hours')),
+    updated_at DATETIME DEFAULT (datetime('now', '+8 hours'))
+);
+
+-- Rating Responses table
+CREATE TABLE IF NOT EXISTS rating_responses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rating_id INTEGER NOT NULL,
+    question_id INTEGER NOT NULL,
+    rating INTEGER NOT NULL,
+    created_at DATETIME DEFAULT (datetime('now', '+8 hours')),
+    FOREIGN KEY (rating_id) REFERENCES ratings(id),
+    FOREIGN KEY (question_id) REFERENCES rating_questions(id)
+);
+
 -- Invoice configuration
 CREATE TABLE IF NOT EXISTS invoice_config (
     id INTEGER PRIMARY KEY CHECK (id = 1),

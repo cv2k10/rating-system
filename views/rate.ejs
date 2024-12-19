@@ -24,6 +24,92 @@
             color: #333;
             margin: 0;
         }
+        .rating-description {
+            display: none;
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+            text-align: center;
+        }
+        .rating-description.active {
+            display: block;
+        }
+        .rating-scale {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .rating-scale h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .rating-scale-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .rating-scale-stars {
+            width: 100px;
+            color: #ffd700;
+        }
+        .rating-scale-desc {
+            flex: 1;
+            color: #666;
+        }
+        .overall-rating {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .star-rating-display {
+            font-size: 24px;
+            color: #ffc107;
+        }
+        .rating-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        .star-rating {
+            direction: ltr;
+            unicode-bidi: normal;
+            color: #ddd;
+        }
+        .star-rating span {
+            display: inline-block;
+            position: relative;
+            font-size: 24px;
+            padding: 0 2px;
+            cursor: pointer;
+        }
+        .star-rating span.hover,
+        .star-rating span.selected {
+            color: #ffc107;
+        }
+        .star-rating span:hover ~ span {
+            color: #ddd;
+        }
+        .star-rating span:hover:before ~ span:before {
+            color: #ddd;
+        }
+        .star-rating .selected {
+            color: #ffc107;
+        }
+        .star-rating span.active {
+            color: #ffc107;
+        }
+        .rating-description {
+            display: none;
+            color: #666;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .rating-description.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -50,93 +136,187 @@
             <input type="hidden" id="invoice_number" value="<%= rating.invoice_number %>">
             <input type="hidden" id="validation_token" value="<%= rating.validation_token %>">
             
-            <div class="mb-4">
-                <h3>Rate your experience</h3>
-                <div class="star-rating">
-                    <span class="star" data-rating="1"><i class="fas fa-star"></i></span>
-                    <span class="star" data-rating="2"><i class="fas fa-star"></i></span>
-                    <span class="star" data-rating="3"><i class="fas fa-star"></i></span>
-                    <span class="star" data-rating="4"><i class="fas fa-star"></i></span>
-                    <span class="star" data-rating="5"><i class="fas fa-star"></i></span>
+            <div class="rating-questions">
+                <% questions.forEach(function(q) { %>
+                    <div class="rating-question mb-4">
+                        <% if (q.title) { %>
+                            <h4><%= q.title %></h4>
+                        <% } %>
+                        <p class="mb-3"><%= q.question %></p>
+                        <div class="d-flex align-items-center">
+                            <div class="star-rating" data-question-id="<%= q.id %>">
+                                <span class="star" data-rating="1"><i class="fas fa-star"></i></span>
+                                <span class="star" data-rating="2"><i class="fas fa-star"></i></span>
+                                <span class="star" data-rating="3"><i class="fas fa-star"></i></span>
+                                <span class="star" data-rating="4"><i class="fas fa-star"></i></span>
+                                <span class="star" data-rating="5"><i class="fas fa-star"></i></span>
+                            </div>
+                            <div class="ms-3">
+                                <div class="rating-description" data-rating="1">Bad</div>
+                                <div class="rating-description" data-rating="2">Needs Improvement</div>
+                                <div class="rating-description" data-rating="3">Average</div>
+                                <div class="rating-description" data-rating="4">Good</div>
+                                <div class="rating-description" data-rating="5">Excellent</div>
+                            </div>
+                        </div>
+                    </div>
+                <% }); %>
+            </div>
+
+            <div class="form-group mb-4">
+                <label for="review">Additional Comments (Optional)</label>
+                <textarea class="form-control" id="review" name="review" rows="3"></textarea>
+            </div>
+
+            <div class="overall-rating mb-4">
+                <h4>Overall Rating</h4>
+                <div class="star-rating-display">
+                    <% for(let i = 1; i <= 5; i++) { %>
+                        <i class="fas fa-star"></i>
+                    <% } %>
+                    <span class="rating-value ms-2">0.0</span>
                 </div>
             </div>
 
-            <div class="mb-4">
-                <label for="review" class="form-label">Your Review (Optional)</label>
-                <textarea class="form-control" id="review" rows="4" maxlength="500" placeholder="Tell us about your experience..."></textarea>
-                <div class="form-text">Maximum 500 characters</div>
-            </div>
-
             <button type="submit" class="btn btn-primary">Submit Rating</button>
+
+            <div id="thankYou" class="alert alert-success mt-4 d-none">
+                Thank you for your feedback! Your rating has been submitted successfully.
+            </div>
         </form>
 
-        <div id="thankYou" class="alert alert-success mt-4 d-none">
-            Thank you for your feedback! Your rating has been submitted successfully.
-        </div>
-    </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const ratings = {};
 
-    <script>
-        let selectedRating = 0;
+                // Star rating interaction
+                document.querySelectorAll('.star-rating').forEach(ratingGroup => {
+                    const questionId = ratingGroup.dataset.questionId;
+                    const stars = Array.from(ratingGroup.querySelectorAll('.star'));
+                    ratings[questionId] = 0;
 
-        // Star rating interaction
-        document.querySelectorAll('.star').forEach(star => {
-            star.addEventListener('mouseover', function() {
-                const rating = this.dataset.rating;
-                updateStars(rating);
-            });
+                    const descriptionElements = ratingGroup.parentElement.querySelectorAll('.rating-description');
 
-            star.addEventListener('click', function() {
-                selectedRating = this.dataset.rating;
-                updateStars(selectedRating);
-            });
-        });
+                    stars.forEach(star => {
+                        star.addEventListener('mouseover', function() {
+                            const rating = parseInt(this.dataset.rating);
+                            // Clear all hover states
+                            stars.forEach(s => s.classList.remove('hover'));
+                            // Add hover state to current and previous stars
+                            stars.forEach((s, index) => {
+                                if (index < rating) {
+                                    s.classList.add('hover');
+                                }
+                            });
+                            updateDescription(descriptionElements, rating.toString());
+                        });
 
-        document.querySelector('.star-rating').addEventListener('mouseout', function() {
-            updateStars(selectedRating);
-        });
+                        star.addEventListener('click', function() {
+                            const rating = parseInt(this.dataset.rating);
+                            ratings[questionId] = rating;
+                            // Clear all states
+                            stars.forEach(s => {
+                                s.classList.remove('hover', 'selected');
+                            });
+                            // Add selected state to current and previous stars
+                            stars.forEach((s, index) => {
+                                if (index < rating) {
+                                    s.classList.add('selected');
+                                }
+                            });
+                            updateDescription(descriptionElements, rating.toString());
+                            updateOverallRating();
+                        });
+                    });
 
-        function updateStars(rating) {
-            document.querySelectorAll('.star').forEach(star => {
-                star.classList.toggle('active', star.dataset.rating <= rating);
-            });
-        }
-
-        // Form submission
-        document.getElementById('ratingForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            if (!selectedRating) {
-                alert('Please select a rating');
-                return;
-            }
-
-            const formData = {
-                validation_token: document.getElementById('validation_token').value,
-                rating: selectedRating,
-                review_text: document.getElementById('review').value
-            };
-
-            try {
-                const response = await fetch('/submit-rating', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
+                    ratingGroup.addEventListener('mouseout', function() {
+                        const rating = ratings[questionId];
+                        // Clear hover states
+                        stars.forEach(s => s.classList.remove('hover'));
+                        // Restore selected states
+                        stars.forEach((s, index) => {
+                            if (index < rating) {
+                                s.classList.add('selected');
+                            }
+                        });
+                        updateDescription(descriptionElements, rating.toString());
+                    });
                 });
 
-                const data = await response.json();
-                if (data.success) {
-                    document.getElementById('ratingForm').classList.add('d-none');
-                    document.getElementById('thankYou').classList.remove('d-none');
-                } else {
-                    alert('Error submitting rating');
+                function updateDescription(descriptions, rating) {
+                    descriptions.forEach(desc => {
+                        desc.classList.toggle('active', desc.dataset.rating === rating);
+                    });
                 }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error submitting rating');
-            }
-        });
-    </script>
+
+                // Update overall rating display
+                const overallStars = document.querySelector('.star-rating-display');
+                const ratingValue = document.querySelector('.rating-value');
+
+                function updateOverallRating() {
+                    const validRatings = Object.values(ratings).filter(r => r > 0);
+                    const average = validRatings.length > 0 
+                        ? (validRatings.reduce((a, b) => parseInt(a) + parseInt(b), 0) / validRatings.length).toFixed(1)
+                        : '0.0';
+
+                    // Update rating value text
+                    ratingValue.textContent = average;
+
+                    // Update stars
+                    const stars = overallStars.querySelectorAll('.fa-star');
+                    const roundedAverage = Math.round(average);
+                    stars.forEach((star, index) => {
+                        if (index < roundedAverage) {
+                            star.style.color = '#ffc107'; // Filled star color
+                        } else {
+                            star.style.color = '#e4e5e9'; // Empty star color
+                        }
+                    });
+                }
+
+                // Initialize overall rating
+                updateOverallRating();
+
+                // Form submission
+                document.getElementById('ratingForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    // Check if all questions are rated
+                    const unratedQuestions = Object.values(ratings).filter(r => r === 0).length;
+                    if (unratedQuestions > 0) {
+                        alert('Please rate all questions');
+                        return;
+                    }
+
+                    const formData = {
+                        validation_token: document.getElementById('validation_token').value,
+                        ratings: ratings,
+                        review_text: document.getElementById('review').value
+                    };
+
+                    try {
+                        const response = await fetch('/submit-rating', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(formData)
+                        });
+
+                        const data = await response.json();
+                        if (data.success) {
+                            document.getElementById('ratingForm').classList.add('d-none');
+                            document.getElementById('thankYou').classList.remove('d-none');
+                        } else {
+                            alert('Error submitting rating');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('Error submitting rating');
+                    }
+                });
+            });
+        </script>
+    </div>
 </body>
 </html>

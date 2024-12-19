@@ -49,8 +49,8 @@ const initDb = () => {
 initDb();
 
 // Middleware
-app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -96,7 +96,16 @@ async function getAndIncrementInvoiceNumber() {
 
 // Generate a random admin path if not set in .env
 const ADMIN_PATH = process.env.ADMIN_PATH || crypto.randomBytes(16).toString('hex');
-console.log('Admin path:', ADMIN_PATH); // Log this only during development
+console.log('Admin path:', ADMIN_PATH);
+
+// Admin middleware to expose admin path to all admin templates
+const adminMiddleware = (req, res, next) => {
+    res.locals.ADMIN_PATH = ADMIN_PATH;
+    next();
+};
+
+// Apply admin middleware to all admin routes
+app.use(`/${ADMIN_PATH}`, adminMiddleware);
 
 // Debug middleware
 app.use((req, res, next) => {
@@ -159,160 +168,269 @@ app.get(`/${ADMIN_PATH}`, (req, res) => {
 });
 
 app.get(`/${ADMIN_PATH}/config`, (req, res) => {
-    // Get customers
-    db.all('SELECT * FROM customers ORDER BY name', [], (err, customers) => {
-        if (err) {
-            console.error('Error fetching customers:', err);
-            return res.status(500).send('Error loading page');
-        }
+    db.serialize(() => {
+        const data = {
+            ADMIN_PATH,
+            questions: [],
+            services: [],
+            providers: [],
+            customers: []
+        };
 
-        // Get services
-        db.all('SELECT * FROM services ORDER BY name', [], (err, services) => {
+        // Get rating questions
+        db.all('SELECT * FROM rating_questions WHERE is_active = 1 ORDER BY sort_order', [], (err, questions) => {
             if (err) {
-                console.error('Error fetching services:', err);
-                return res.status(500).send('Error loading page');
+                console.error('Error retrieving questions:', err);
+                return res.status(500).send('Error retrieving configuration');
             }
+            data.questions = questions;
 
-            // Get service providers
-            db.all('SELECT * FROM service_providers ORDER BY name', [], (err, providers) => {
+            // Get services
+            db.all('SELECT * FROM services WHERE is_active = 1 ORDER BY name', [], (err, services) => {
                 if (err) {
-                    console.error('Error fetching providers:', err);
-                    return res.status(500).send('Error loading page');
+                    console.error('Error retrieving services:', err);
+                    return res.status(500).send('Error retrieving configuration');
                 }
+                data.services = services;
 
-                res.render('config', {
-                    customers,
-                    services,
-                    providers,
-                    adminPath: ADMIN_PATH
+                // Get service providers
+                db.all('SELECT * FROM service_providers WHERE is_active = 1 ORDER BY name', [], (err, providers) => {
+                    if (err) {
+                        console.error('Error retrieving providers:', err);
+                        return res.status(500).send('Error retrieving configuration');
+                    }
+                    data.providers = providers;
+
+                    // Get customers
+                    db.all('SELECT * FROM customers WHERE is_active = 1 ORDER BY name', [], (err, customers) => {
+                        if (err) {
+                            console.error('Error retrieving customers:', err);
+                            return res.status(500).send('Error retrieving configuration');
+                        }
+                        data.customers = customers;
+
+                        res.render('admin/config', data);
+                    });
                 });
             });
         });
     });
 });
 
-app.get(`/${ADMIN_PATH}/dashboard`, (req, res) => {
-    const { search, status, dateFrom, dateTo, serviceBy } = req.query;
+app.get(`/${ADMIN_PATH}/dashboard`, async (req, res) => {
+    console.log('Loading dashboard...');
     
-    // Get service providers for filter
-    db.all('SELECT * FROM service_providers WHERE is_active = 1 ORDER BY name', [], (err, providers) => {
-        if (err) {
-            console.error('Error fetching providers:', err);
-            return res.status(500).send('Error loading page');
-        }
+    const filters = {
+        search: req.query.search || '',
+        status: req.query.status || '',
+        dateFrom: req.query.dateFrom || '',
+        dateTo: req.query.dateTo || '',
+        serviceBy: req.query.serviceBy || ''
+    };
 
-        let baseQuery = `
+    try {
+        // Get rating statistics
+        const query1 = `
+            SELECT 
+                COUNT(DISTINCT r.id) as total,
+                COALESCE(
+                    AVG(
+                        (SELECT COALESCE(AVG(rating), 0) 
+                         FROM rating_responses 
+                         WHERE rating_id = r.id)
+                    ), 0
+                ) as average
+            FROM ratings r
+            WHERE r.is_submitted = 1
+        `;
+        console.log('Running query 1:', query1);
+        
+        const stats = await new Promise((resolve, reject) => {
+            db.get(query1, [], (err, result) => {
+                if (err) {
+                    console.error('Error in query 1:', err);
+                    reject(err);
+                }
+                console.log('Query 1 result:', result);
+                resolve({
+                    total: result ? result.total : 0,
+                    average: result ? result.average : 0
+                });
+            });
+        });
+
+        // Get rating breakdown
+        const query2 = `
+            WITH RatingAverages AS (
+                SELECT 
+                    r.id,
+                    ROUND(AVG(CAST(rr.rating AS FLOAT))) as avg_rating
+                FROM ratings r
+                JOIN rating_responses rr ON r.id = rr.rating_id
+                WHERE r.is_submitted = 1
+                GROUP BY r.id
+            )
+            SELECT 
+                avg_rating as rating,
+                COUNT(*) as count
+            FROM RatingAverages
+            WHERE avg_rating IS NOT NULL
+            GROUP BY avg_rating
+            ORDER BY avg_rating DESC
+        `;
+        console.log('Running query 2:', query2);
+        
+        const breakdown = await new Promise((resolve, reject) => {
+            db.all(query2, [], (err, rows) => {
+                if (err) {
+                    console.error('Error in query 2:', err);
+                    reject(err);
+                }
+                console.log('Query 2 result:', rows);
+                resolve(rows || []);
+            });
+        });
+
+        // Build the rating stats object
+        const ratingStats = {
+            total: stats.total || 0,
+            avg_rating: parseFloat(stats.average || 0).toFixed(1),
+            five_star: 0,
+            four_star: 0,
+            three_star: 0,
+            two_star: 0,
+            one_star: 0
+        };
+
+        // Fill in the breakdown counts
+        breakdown.forEach(row => {
+            const rating = Math.round(row.rating);
+            switch(rating) {
+                case 5: ratingStats.five_star = row.count; break;
+                case 4: ratingStats.four_star = row.count; break;
+                case 3: ratingStats.three_star = row.count; break;
+                case 2: ratingStats.two_star = row.count; break;
+                case 1: ratingStats.one_star = row.count; break;
+            }
+        });
+
+        // Get service providers
+        const query3 = `SELECT DISTINCT name FROM service_providers WHERE is_active = 1`;
+        console.log('Running query 3:', query3);
+        
+        const providers = await new Promise((resolve, reject) => {
+            db.all(query3, [], (err, rows) => {
+                if (err) {
+                    console.error('Error in query 3:', err);
+                    reject(err);
+                }
+                console.log('Query 3 result:', rows);
+                resolve(rows || []);
+            });
+        });
+
+        // Build the ratings query with filters
+        let ratingQuery = `
+            SELECT 
+                r.id,
+                r.invoice_number,
+                DATE(r.invoice_date) as invoice_date,
+                r.created_at,
+                r.submitted_at,
+                r.is_submitted,
+                r.review_text,
+                c.name as customer_name,
+                c.id as customer_id,
+                s.name as service_name,
+                sp.name as provider_name,
+                COALESCE(
+                    (SELECT ROUND(AVG(CAST(rating AS FLOAT)), 1) 
+                     FROM rating_responses 
+                     WHERE rating_id = r.id
+                     GROUP BY rating_id
+                    ), 
+                    0
+                ) as rating
             FROM ratings r
             LEFT JOIN customers c ON r.customer_id = c.id
             LEFT JOIN services s ON r.service_id = s.id
             LEFT JOIN service_providers sp ON r.service_provider_id = sp.id
             WHERE 1=1
         `;
-        
-        const params = [];
+        console.log('Running ratings query:', ratingQuery);
+        console.log('Query params:', []);
 
-        if (search) {
-            baseQuery += ` AND (c.name LIKE ? OR c.customer_id LIKE ? OR r.invoice_number LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        const queryParams = [];
+
+        if (filters.search) {
+            ratingQuery += ` AND (
+                c.name LIKE ? OR 
+                c.id LIKE ? OR 
+                r.invoice_number LIKE ?
+            )`;
+            const searchTerm = `%${filters.search}%`;
+            queryParams.push(searchTerm, searchTerm, searchTerm);
         }
 
-        if (status) {
-            baseQuery += ` AND r.is_submitted = ?`;
-            params.push(status === 'submitted' ? 1 : 0);
+        if (filters.status === 'submitted') {
+            ratingQuery += ` AND r.is_submitted = 1`;
+        } else if (filters.status === 'pending') {
+            ratingQuery += ` AND r.is_submitted = 0`;
         }
 
-        if (dateFrom) {
-            baseQuery += ` AND date(r.invoice_date) >= date(?)`;
-            params.push(dateFrom);
+        if (filters.dateFrom) {
+            ratingQuery += ` AND DATE(r.created_at) >= DATE(?)`;
+            queryParams.push(filters.dateFrom);
         }
 
-        if (dateTo) {
-            baseQuery += ` AND date(r.invoice_date) <= date(?)`;
-            params.push(dateTo);
+        if (filters.dateTo) {
+            ratingQuery += ` AND DATE(r.created_at) <= DATE(?)`;
+            queryParams.push(filters.dateTo);
         }
 
-        if (serviceBy) {
-            baseQuery += ` AND sp.name = ?`;
-            params.push(serviceBy);
+        if (filters.serviceBy) {
+            ratingQuery += ` AND sp.name = ?`;
+            queryParams.push(filters.serviceBy);
         }
 
-        // Get statistics based on filtered results
-        const statsQuery = `
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN is_submitted = 1 THEN 1 ELSE 0 END) as submitted,
-                SUM(CASE WHEN is_submitted = 0 THEN 1 ELSE 0 END) as pending,
-                ROUND(AVG(CASE WHEN rating IS NOT NULL THEN rating ELSE 0 END), 1) as avg_rating,
-                SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as five_star,
-                SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as four_star,
-                SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as three_star,
-                SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as two_star,
-                SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as one_star
-            ${baseQuery}
-        `;
+        ratingQuery += ` GROUP BY r.id ORDER BY r.created_at DESC`;
+        console.log('Running ratings query:', ratingQuery);
+        console.log('Query params:', queryParams);
 
-        // Get ratings with the same filter
-        const ratingsQuery = `
-            SELECT r.*, c.name as customer_name, c.customer_id as customer_id, 
-                   s.name as service_name, sp.name as provider_name,
-                   r.validation_token
-            ${baseQuery}
-            ORDER BY r.created_at DESC
-        `;
-
-        // Execute both queries
-        db.get(statsQuery, params, (err, rawStats) => {
-            if (err) {
-                console.error('Error fetching stats:', err);
-                return res.status(500).send('Error loading page');
-            }
-
-            // Ensure stats have default values
-            const stats = {
-                total: rawStats.total || 0,
-                submitted: rawStats.submitted || 0,
-                pending: rawStats.pending || 0,
-                avg_rating: rawStats.avg_rating || 0,
-                five_star: rawStats.five_star || 0,
-                four_star: rawStats.four_star || 0,
-                three_star: rawStats.three_star || 0,
-                two_star: rawStats.two_star || 0,
-                one_star: rawStats.one_star || 0
-            };
-
-            // Get ratings
-            db.all(ratingsQuery, params, (err, ratings) => {
+        const ratings = await new Promise((resolve, reject) => {
+            db.all(ratingQuery, queryParams, (err, rows) => {
                 if (err) {
-                    console.error('Error fetching ratings:', err);
-                    return res.status(500).send('Error loading page');
+                    console.error('Error in ratings query:', err);
+                    reject(err);
                 }
-
-                res.render('dashboard', { 
-                    ratings,
-                    providers,
-                    stats,
-                    filters: {
-                        search: search || '',
-                        status: status || '',
-                        dateFrom: dateFrom || '',
-                        dateTo: dateTo || '',
-                        serviceBy: serviceBy || ''
-                    },
-                    adminPath: ADMIN_PATH,
-                    formatDate: (date) => {
-                        return new Date(date.replace(' ', 'T') + '+08:00').toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            timeZone: 'Asia/Singapore'
-                        });
-                    }
-                });
+                console.log('Ratings query result:', rows);
+                resolve(rows || []);
             });
         });
-    });
+
+        // Helper function to format dates
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+
+        res.render('admin/dashboard', {
+            stats: ratingStats,
+            ratings: ratings,
+            providers: providers,
+            filters: filters,
+            formatDate: formatDate,
+            ADMIN_PATH: ADMIN_PATH
+        });
+
+    } catch (error) {
+        console.error('Dashboard error:', error);
+        res.status(500).send('Error loading dashboard');
+    }
 });
 
 app.get(`/${ADMIN_PATH}/export-csv`, (req, res) => {
@@ -523,51 +641,168 @@ handleConfigItem('service', 'services');
 handleConfigItem('provider', 'service_providers');
 
 app.get('/rate/:token', (req, res) => {
-    const { token } = req.params;
+    const token = req.params.token;
     
-    const sql = `
-        SELECT r.*, c.name as customer_name, s.name as service_name, sp.name as provider_name
-        FROM ratings r
-        LEFT JOIN customers c ON r.customer_id = c.id
-        LEFT JOIN services s ON r.service_id = s.id
-        LEFT JOIN service_providers sp ON r.service_provider_id = sp.id
-        WHERE r.validation_token = ? AND r.is_submitted = 0
-    `;
-    
-    db.get(sql, [token], (err, row) => {
+    db.get('SELECT r.*, c.name as customer_name, s.name as service_name, sp.name as provider_name FROM ratings r LEFT JOIN customers c ON r.customer_id = c.id LEFT JOIN services s ON r.service_id = s.id LEFT JOIN service_providers sp ON r.service_provider_id = sp.id WHERE r.validation_token = ? AND r.is_submitted = 0', [token], (err, rating) => {
         if (err) {
-            console.error('Database error:', err);
-            return res.status(500).render('error', { message: 'Database error' });
+            console.error(err);
+            return res.status(500).send('Error retrieving rating');
         }
-        if (!row) {
-            return res.status(404).render('error', { message: 'Invalid or expired rating link' });
+        if (!rating) {
+            return res.status(404).send('Rating not found or already submitted');
         }
-        res.render('rate', { rating: row });
+
+        // Get active rating questions
+        db.all('SELECT * FROM rating_questions WHERE is_active = 1 ORDER BY sort_order', [], (err, questions) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).send('Error retrieving questions');
+            }
+
+            res.render('rate', { rating, questions });
+        });
     });
 });
 
 app.post('/submit-rating', (req, res) => {
-    const { validation_token, rating, review_text } = req.body;
-    
-    const sql = `
-        UPDATE ratings 
-        SET rating = ?, 
-            review_text = ?, 
-            is_submitted = 1, 
-            submitted_at = datetime('now', '+8 hours')
-        WHERE validation_token = ? 
-        AND is_submitted = 0
-    `;
-    
-    db.run(sql, [rating, review_text, validation_token], function(err) {
+    const { validation_token, ratings, review_text } = req.body;
+
+    if (!validation_token || !ratings || Object.keys(ratings).length === 0) {
+        return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    db.serialize(() => {
+        db.get('SELECT id FROM ratings WHERE validation_token = ? AND is_submitted = 0', [validation_token], (err, rating) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ success: false, error: 'Database error' });
+            }
+            if (!rating) {
+                return res.status(404).json({ success: false, error: 'Rating not found or already submitted' });
+            }
+
+            const ratingId = rating.id;
+            
+            // Calculate average rating
+            const averageRating = Math.round(
+                Object.values(ratings).reduce((sum, r) => sum + parseInt(r), 0) / Object.keys(ratings).length
+            );
+
+            db.run('BEGIN TRANSACTION');
+
+            // Update main rating
+            db.run(
+                'UPDATE ratings SET rating = ?, review_text = ?, is_submitted = 1, submitted_at = datetime("now", "+8 hours") WHERE id = ?',
+                [averageRating, review_text, ratingId],
+                (err) => {
+                    if (err) {
+                        console.error(err);
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ success: false, error: 'Database error' });
+                    }
+
+                    // Insert individual question ratings
+                    const stmt = db.prepare('INSERT INTO rating_responses (rating_id, question_id, rating) VALUES (?, ?, ?)');
+                    
+                    try {
+                        for (const [questionId, rating] of Object.entries(ratings)) {
+                            stmt.run(ratingId, questionId, rating);
+                        }
+                        stmt.finalize();
+                        
+                        db.run('COMMIT');
+                        res.json({ success: true });
+                    } catch (err) {
+                        console.error(err);
+                        db.run('ROLLBACK');
+                        res.status(500).json({ success: false, error: 'Database error' });
+                    }
+                }
+            );
+        });
+    });
+});
+
+app.post(`/${ADMIN_PATH}/api/rating-questions`, (req, res) => {
+    const { title, question } = req.body;
+    if (!question) {
+        return res.status(400).json({ error: 'Question is required' });
+    }
+
+    db.run(
+        'INSERT INTO rating_questions (title, question, is_active) VALUES (?, ?, 1)',
+        [title || null, question],
+        function(err) {
+            if (err) {
+                console.error('Error creating question:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+app.put(`/${ADMIN_PATH}/api/rating-questions/:id`, (req, res) => {
+    const { title, question } = req.body;
+    const { id } = req.params;
+
+    if (!question) {
+        return res.status(400).json({ error: 'Question is required' });
+    }
+
+    db.run(
+        'UPDATE rating_questions SET title = ?, question = ?, updated_at = datetime("now", "+8 hours") WHERE id = ?',
+        [title || null, question, id],
+        function(err) {
+            if (err) {
+                console.error('Error updating question:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Question not found' });
+            }
+            res.json({ success: true });
+        }
+    );
+});
+
+app.delete(`/${ADMIN_PATH}/api/rating-questions/:id`, (req, res) => {
+    const { id } = req.params;
+
+    db.run('DELETE FROM rating_questions WHERE id = ?', [id], (err) => {
         if (err) {
-            console.error('Error submitting rating:', err);
+            console.error(err);
             return res.status(500).json({ error: 'Database error' });
         }
-        if (this.changes === 0) {
-            return res.status(400).json({ error: 'Invalid submission or rating already submitted' });
-        }
         res.json({ success: true });
+    });
+});
+
+app.post(`/${ADMIN_PATH}/api/rating-questions/reorder`, (req, res) => {
+    const { order } = req.body;
+
+    if (!Array.isArray(order)) {
+        return res.status(400).json({ error: 'Invalid order data' });
+    }
+
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+
+        const stmt = db.prepare('UPDATE rating_questions SET sort_order = ? WHERE id = ?');
+        
+        try {
+            order.forEach(item => {
+                stmt.run(item.sort_order, item.id);
+            });
+            stmt.finalize();
+            
+            db.run('COMMIT');
+            res.json({ success: true });
+        } catch (err) {
+            console.error(err);
+            db.run('ROLLBACK');
+            res.status(500).json({ error: 'Database error' });
+        }
     });
 });
 

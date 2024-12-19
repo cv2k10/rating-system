@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HotSpring - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .brand-header {
+            background: #fff;
+            padding: 15px 30px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 20px;
+        }
+        .brand-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+        .rating-breakdown {
+            text-align: center;
+            padding: 30px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .rating-breakdown h2 {
+            font-size: 48px;
+            margin: 20px 0;
+        }
+        .rating-breakdown .total-ratings {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .star-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 10px 0;
+            gap: 10px;
+        }
+        .star {
+            color: #ffc107;
+        }
+        .empty-star {
+            color: #e4e5e9;
+        }
+        .rating-count {
+            min-width: 30px;
+            text-align: center;
+        }
+        .filters {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .ratings-table {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .table th {
+            border-top: none;
+            background: #f8f9fa;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-submitted {
+            background: #d4edda;
+            color: #155724;
+        }
+        .export-btn {
+            float: right;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header class="brand-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="brand-title">HotSpring Admin</h1>
+            <nav>
+                <a href="/<%= ADMIN_PATH %>" class="btn btn-primary me-2">
+                    <i class="fas fa-plus-circle"></i> Generate Rating Link
+                </a>
+                <a href="/<%= ADMIN_PATH %>/dashboard" class="btn btn-outline-secondary me-2">Dashboard</a>
+                <a href="/<%= ADMIN_PATH %>/config" class="btn btn-outline-secondary">Configuration</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Ratings Dashboard</h2>
+            <button class="btn btn-success export-btn">
+                <i class="fas fa-download"></i> Export to CSV
+            </button>
+        </div>
+
+        <div class="rating-breakdown">
+            <h3>Rating Breakdown (All Service Providers)</h3>
+            <h2><%= stats.avg_rating %> / 5.0</h2>
+            <div class="total-ratings">(<%= stats.total %> ratings)</div>
+
+            <div class="star-rows">
+                <div class="star-row">
+                    <% for(let i = 0; i < 5; i++) { %>
+                        <i class="fas fa-star star"></i>
+                    <% } %>
+                    <span class="rating-count"><%= stats.five_star %></span>
+                </div>
+                <div class="star-row">
+                    <% for(let i = 0; i < 4; i++) { %>
+                        <i class="fas fa-star star"></i>
+                    <% } %>
+                    <i class="fas fa-star empty-star"></i>
+                    <span class="rating-count"><%= stats.four_star %></span>
+                </div>
+                <div class="star-row">
+                    <% for(let i = 0; i < 3; i++) { %>
+                        <i class="fas fa-star star"></i>
+                    <% } %>
+                    <% for(let i = 0; i < 2; i++) { %>
+                        <i class="fas fa-star empty-star"></i>
+                    <% } %>
+                    <span class="rating-count"><%= stats.three_star %></span>
+                </div>
+                <div class="star-row">
+                    <% for(let i = 0; i < 2; i++) { %>
+                        <i class="fas fa-star star"></i>
+                    <% } %>
+                    <% for(let i = 0; i < 3; i++) { %>
+                        <i class="fas fa-star empty-star"></i>
+                    <% } %>
+                    <span class="rating-count"><%= stats.two_star %></span>
+                </div>
+                <div class="star-row">
+                    <i class="fas fa-star star"></i>
+                    <% for(let i = 0; i < 4; i++) { %>
+                        <i class="fas fa-star empty-star"></i>
+                    <% } %>
+                    <span class="rating-count"><%= stats.one_star %></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <input type="text" class="form-control" id="search" 
+                           placeholder="Search by customer name, ID, or invoice" 
+                           value="<%= filters.search %>">
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="status">
+                        <option value="">All Status</option>
+                        <option value="submitted" <%= filters.status === 'submitted' ? 'selected' : '' %>>Submitted</option>
+                        <option value="pending" <%= filters.status === 'pending' ? 'selected' : '' %>>Pending</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <input type="date" class="form-control" id="dateFrom" value="<%= filters.dateFrom %>">
+                </div>
+                <div class="col-md-2">
+                    <input type="date" class="form-control" id="dateTo" value="<%= filters.dateTo %>">
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="serviceBy">
+                        <option value="">All Service Providers</option>
+                        <% providers.forEach(function(provider) { %>
+                            <option value="<%= provider.name %>" 
+                                    <%= filters.serviceBy === provider.name ? 'selected' : '' %>>
+                                <%= provider.name %>
+                            </option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-primary w-100" id="filterBtn">Filter</button>
+                </div>
+            </div>
+            <button class="btn btn-link mt-2" id="resetFilters">Reset Filters</button>
+        </div>
+
+        <div class="ratings-table">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Service</th>
+                        <th>Service By</th>
+                        <th>Rating</th>
+                        <th>Review</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Submitted</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% ratings.forEach(function(rating) { %>
+                        <tr>
+                            <td><%= rating.invoice_number %></td>
+                            <td><%= formatDate(rating.invoice_date) %></td>
+                            <td><%= rating.customer_name %> (<%= rating.customer_id %>)</td>
+                            <td><%= rating.service_name %></td>
+                            <td><%= rating.provider_name %></td>
+                            <td>
+                                <% if (rating.rating) { %>
+                                    <% 
+                                        const fullStars = Math.floor(rating.rating);
+                                        const hasHalfStar = rating.rating % 1 >= 0.5;
+                                    %>
+                                    <% for(let i = 0; i < fullStars; i++) { %>
+                                        <i class="fas fa-star star"></i>
+                                    <% } %>
+                                    <% if (hasHalfStar) { %>
+                                        <i class="fas fa-star-half-alt star"></i>
+                                    <% } %>
+                                    <% for(let i = Math.ceil(rating.rating); i < 5; i++) { %>
+                                        <i class="fas fa-star empty-star"></i>
+                                    <% } %>
+                                    (<%= rating.rating %>)
+                                <% } else { %>
+                                    -
+                                <% } %>
+                            </td>
+                            <td><%= rating.review_text || '-' %></td>
+                            <td>
+                                <% if (rating.is_submitted) { %>
+                                    <span class="status-badge status-submitted">Submitted</span>
+                                <% } else { %>
+                                    <span class="status-badge status-pending">Pending</span>
+                                <% } %>
+                            </td>
+                            <td><%= formatDate(rating.created_at) %></td>
+                            <td><%= formatDate(rating.submitted_at) %></td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('filterBtn').addEventListener('click', function() {
+            const search = document.getElementById('search').value;
+            const status = document.getElementById('status').value;
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            const serviceBy = document.getElementById('serviceBy').value;
+
+            const params = new URLSearchParams({
+                search: search,
+                status: status,
+                dateFrom: dateFrom,
+                dateTo: dateTo,
+                serviceBy: serviceBy
+            });
+
+            window.location.href = `/<%= ADMIN_PATH %>/dashboard?${params.toString()}`;
+        });
+
+        document.getElementById('resetFilters').addEventListener('click', function() {
+            window.location.href = `/<%= ADMIN_PATH %>/dashboard`;
+        });
+
+        document.querySelector('.export-btn').addEventListener('click', function() {
+            const params = new URLSearchParams(window.location.search);
+            params.append('export', 'csv');
+            window.location.href = `/<%= ADMIN_PATH %>/export-ratings?${params.toString()}`;
+        });
+    </script>
+</body>
+</html>
