@@ -68,6 +68,10 @@
         .table th {
             border-top: none;
             background: #f8f9fa;
+            cursor: pointer;
+        }
+        .table th:hover {
+            background: #e9ecef;
         }
         .status-badge {
             padding: 5px 10px;
@@ -85,6 +89,13 @@
         .export-btn {
             float: right;
             margin-bottom: 20px;
+        }
+        .sort-icon {
+            margin-left: 5px;
+            opacity: 0.3;
+        }
+        .sort-icon.active {
+            opacity: 1;
         }
     </style>
 </head>
@@ -199,16 +210,16 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Invoice #</th>
-                        <th>Date</th>
-                        <th>Customer</th>
-                        <th>Service</th>
-                        <th>Service By</th>
-                        <th>Rating</th>
+                        <th data-sort="invoice_number">Invoice # <i class="fas fa-sort sort-icon"></i></th>
+                        <th data-sort="invoice_date">Date <i class="fas fa-sort sort-icon"></i></th>
+                        <th data-sort="customer_name">Customer <i class="fas fa-sort sort-icon"></i></th>
+                        <th data-sort="service_name">Service <i class="fas fa-sort sort-icon"></i></th>
+                        <th data-sort="provider_name">Service By <i class="fas fa-sort sort-icon"></i></th>
+                        <th data-sort="rating">Rating <i class="fas fa-sort sort-icon"></i></th>
                         <th>Review</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                        <th>Submitted</th>
+                        <th data-sort="is_submitted">Status <i class="fas fa-sort sort-icon"></i></th>
+                        <th data-sort="created_at">Created <i class="fas fa-sort sort-icon"></i></th>
+                        <th data-sort="submitted_at">Submitted <i class="fas fa-sort sort-icon"></i></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -257,6 +268,63 @@
     </div>
 
     <script>
+        // Sorting functionality
+        const getCellValue = (tr, idx) => {
+            const cell = tr.children[idx];
+            if (!cell) return '';
+            const text = cell.innerText || cell.textContent;
+            return isNaN(text) ? text.toLowerCase() : parseFloat(text);
+        };
+
+        const comparer = (idx, asc) => (a, b) => {
+            const v1 = getCellValue(asc ? a : b, idx);
+            const v2 = getCellValue(asc ? b : a, idx);
+            return v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2) 
+                ? v1 - v2 
+                : v1.toString().localeCompare(v2);
+        };
+
+        document.querySelectorAll('th').forEach(th => {
+            if (!th.dataset.sort) return;
+            
+            th.addEventListener('click', () => {
+                const table = th.closest('table');
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const thIndex = Array.from(th.parentElement.children).indexOf(th);
+                const currentIcon = th.querySelector('.sort-icon');
+                
+                // Reset all other sort icons
+                document.querySelectorAll('th .sort-icon').forEach(icon => {
+                    if (icon !== currentIcon) {
+                        icon.className = 'fas fa-sort sort-icon';
+                    }
+                });
+                
+                let isAscending;
+                // Determine sort direction based on current icon state
+                if (currentIcon.classList.contains('fa-sort')) {
+                    isAscending = true;
+                    currentIcon.className = 'fas fa-sort-up sort-icon active';
+                } else if (currentIcon.classList.contains('fa-sort-up')) {
+                    isAscending = false;
+                    currentIcon.className = 'fas fa-sort-down sort-icon active';
+                } else {
+                    // Reset to unsorted state
+                    currentIcon.className = 'fas fa-sort sort-icon';
+                    // Restore original order by sorting by first column ascending
+                    rows.sort(comparer(0, true));
+                    tbody.append(...rows);
+                    return;
+                }
+                
+                // Sort the rows
+                rows.sort(comparer(thIndex, isAscending));
+                tbody.append(...rows);
+            });
+        });
+
+        // Filter functionality
         document.getElementById('filterBtn').addEventListener('click', function() {
             const search = document.getElementById('search').value;
             const status = document.getElementById('status').value;
