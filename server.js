@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -52,7 +53,13 @@ initDb();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
+
+const expressLayouts = require('express-ejs-layouts');
+
+// Set up EJS
 app.set('view engine', 'ejs');
+app.use(expressLayouts);
+app.set('layout', 'layouts/admin'); // Set default layout
 app.set('views', path.join(__dirname, 'views'));
 
 // Helper function to generate token
@@ -104,21 +111,24 @@ const adminMiddleware = (req, res, next) => {
     next();
 };
 
-// Apply admin middleware to all admin routes
-app.use(`/${ADMIN_PATH}`, adminMiddleware);
-
 // Debug middleware
 app.use((req, res, next) => {
     console.log('Request URL:', req.url);
+    console.log('Request method:', req.method);
+    console.log('Request path:', req.path);
     next();
 });
+
+// Apply admin middleware to all admin routes
+const adminRouter = express.Router();
+app.use(`/${ADMIN_PATH}`, adminMiddleware, adminRouter);
 
 // Routes
 app.get('/', (req, res) => {
     res.render('index');
 });
 
-app.get(`/${ADMIN_PATH}`, (req, res) => {
+adminRouter.get('/', (req, res) => {
     // Get customers
     db.all('SELECT id, name, customer_id, is_active FROM customers WHERE is_active = 1', [], (err, customers) => {
         if (err) {
@@ -167,10 +177,10 @@ app.get(`/${ADMIN_PATH}`, (req, res) => {
     });
 });
 
-app.get(`/${ADMIN_PATH}/config`, (req, res) => {
+adminRouter.get('/config', (req, res) => {
     db.serialize(() => {
         const data = {
-            ADMIN_PATH,
+            adminPath: ADMIN_PATH,
             questions: [],
             services: [],
             providers: [],
@@ -217,7 +227,7 @@ app.get(`/${ADMIN_PATH}/config`, (req, res) => {
     });
 });
 
-app.get(`/${ADMIN_PATH}/dashboard`, async (req, res) => {
+adminRouter.get('/dashboard', async (req, res) => {
     console.log('Loading dashboard...');
     
     const filters = {
@@ -433,7 +443,7 @@ app.get(`/${ADMIN_PATH}/dashboard`, async (req, res) => {
     }
 });
 
-app.get(`/${ADMIN_PATH}/export-csv`, (req, res) => {
+adminRouter.get('/export-csv', (req, res) => {
     const sql = `
         SELECT 
             r.invoice_number,
@@ -488,7 +498,7 @@ app.get(`/${ADMIN_PATH}/export-csv`, (req, res) => {
 });
 
 // API endpoints for configuration
-app.post(`/${ADMIN_PATH}/api/generate`, async (req, res) => {
+adminRouter.post('/api/generate', async (req, res) => {
     const { invoice_number, invoice_date, customer_id, service_id, service_provider_id } = req.body;
     
     // Validate required fields
@@ -544,7 +554,17 @@ app.post(`/${ADMIN_PATH}/api/generate`, async (req, res) => {
 });
 
 // Special handler for customers
-app.post(`/${ADMIN_PATH}/api/config/customer`, (req, res) => {
+adminRouter.get('/api/config/customers', (req, res) => {
+    db.all('SELECT * FROM customers WHERE is_active = 1 ORDER BY name', [], (err, customers) => {
+        if (err) {
+            console.error('Error getting customers:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(customers);
+    });
+});
+
+adminRouter.post('/api/config/customer', (req, res) => {
     const { name, customer_id } = req.body;
     if (!name || !customer_id) {
         return res.status(400).json({ error: 'Name and Customer ID are required' });
@@ -559,8 +579,7 @@ app.post(`/${ADMIN_PATH}/api/config/customer`, (req, res) => {
     });
 });
 
-// Update customer
-app.put(`/${ADMIN_PATH}/api/config/customer/:id`, (req, res) => {
+adminRouter.put('/api/config/customer/:id', (req, res) => {
     const { id } = req.params;
     const { name, customer_id } = req.body;
     if (!name || !customer_id) {
@@ -576,8 +595,7 @@ app.put(`/${ADMIN_PATH}/api/config/customer/:id`, (req, res) => {
     });
 });
 
-// Toggle customer active status
-app.post(`/${ADMIN_PATH}/api/config/customer/:id/toggle`, (req, res) => {
+adminRouter.post('/api/config/customer/:id/toggle', (req, res) => {
     const { id } = req.params;
     db.run('UPDATE customers SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?', [id], (err) => {
         if (err) {
@@ -590,8 +608,22 @@ app.post(`/${ADMIN_PATH}/api/config/customer/:id/toggle`, (req, res) => {
 
 // Generic CRUD operations for other config items
 const handleConfigItem = (type, table) => {
+    // Get all
+    adminRouter.get(`/api/config/${type}s`, (req, res) => {
+        console.log(`Getting all ${type}s from ${table}`);
+        db.all(`SELECT * FROM ${table} WHERE is_active = 1 ORDER BY name`, [], (err, items) => {
+            if (err) {
+                console.error(`Error getting ${type}s:`, err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            console.log(`Found ${items.length} ${type}s`);
+            res.json(items);
+        });
+    });
+
     // Create
-    app.post(`/${ADMIN_PATH}/api/config/${type}`, (req, res) => {
+    adminRouter.post(`/api/config/${type}`, (req, res) => {
+        console.log(`Creating new ${type}:`, req.body);
         const { name } = req.body;
         if (!name) {
             return res.status(400).json({ error: 'Name is required' });
@@ -602,12 +634,14 @@ const handleConfigItem = (type, table) => {
                 console.error(`Error creating ${type}:`, err);
                 return res.status(500).json({ error: 'Database error' });
             }
+            console.log(`Created ${type} with id ${this.lastID}`);
             res.json({ id: this.lastID, name });
         });
     });
 
     // Update
-    app.put(`/${ADMIN_PATH}/api/config/${type}/:id`, (req, res) => {
+    adminRouter.put(`/api/config/${type}/:id`, (req, res) => {
+        console.log(`Updating ${type} ${req.params.id}:`, req.body);
         const { id } = req.params;
         const { name } = req.body;
         if (!name) {
@@ -619,18 +653,21 @@ const handleConfigItem = (type, table) => {
                 console.error(`Error updating ${type}:`, err);
                 return res.status(500).json({ error: 'Database error' });
             }
+            console.log(`Updated ${type} ${id}`);
             res.json({ success: true });
         });
     });
 
-    // Toggle active status
-    app.post(`/${ADMIN_PATH}/api/config/${type}/:id/toggle`, (req, res) => {
+    // Delete
+    adminRouter.delete(`/api/config/${type}/:id`, (req, res) => {
+        console.log(`Deleting ${type} ${req.params.id}`);
         const { id } = req.params;
-        db.run(`UPDATE ${table} SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?`, [id], (err) => {
+        db.run(`UPDATE ${table} SET is_active = 0 WHERE id = ?`, [id], (err) => {
             if (err) {
-                console.error(`Error toggling ${type}:`, err);
+                console.error(`Error deleting ${type}:`, err);
                 return res.status(500).json({ error: 'Database error' });
             }
+            console.log(`Deleted ${type} ${id}`);
             res.json({ success: true });
         });
     });
@@ -639,6 +676,99 @@ const handleConfigItem = (type, table) => {
 // Set up CRUD routes for each config type
 handleConfigItem('service', 'services');
 handleConfigItem('provider', 'service_providers');
+
+// Handle rating questions
+adminRouter.get('/api/config/questions', (req, res) => {
+    console.log('Getting all questions');
+    db.all(`SELECT * FROM rating_questions WHERE is_active = 1 ORDER BY sort_order, id`, [], (err, items) => {
+        if (err) {
+            console.error('Error getting questions:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        console.log(`Found ${items.length} questions`);
+        res.json(items);
+    });
+});
+
+adminRouter.get('/api/config/question/:id', (req, res) => {
+    console.log(`Getting question ${req.params.id}`);
+    const { id } = req.params;
+    db.get('SELECT * FROM rating_questions WHERE id = ? AND is_active = 1', [id], (err, item) => {
+        if (err) {
+            console.error('Error getting question:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (!item) {
+            return res.status(404).json({ error: 'Question not found' });
+        }
+        res.json(item);
+    });
+});
+
+adminRouter.post('/api/config/question', (req, res) => {
+    console.log('Creating new question:', req.body);
+    const { title, question } = req.body;
+    if (!question) {
+        return res.status(400).json({ error: 'Question is required' });
+    }
+
+    // Get the maximum sort_order
+    db.get('SELECT MAX(sort_order) as maxOrder FROM rating_questions WHERE is_active = 1', [], (err, row) => {
+        if (err) {
+            console.error('Error getting max sort order:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        const nextOrder = (row.maxOrder || 0) + 1;
+        db.run(
+            'INSERT INTO rating_questions (title, question, sort_order) VALUES (?, ?, ?)',
+            [title || '', question, nextOrder],
+            function(err) {
+                if (err) {
+                    console.error('Error creating question:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                console.log(`Created question with id ${this.lastID}`);
+                res.json({ id: this.lastID, title, question, sort_order: nextOrder });
+            }
+        );
+    });
+});
+
+adminRouter.put('/api/config/question/:id', (req, res) => {
+    console.log(`Updating question ${req.params.id}:`, req.body);
+    const { id } = req.params;
+    const { title, question } = req.body;
+    if (!question) {
+        return res.status(400).json({ error: 'Question is required' });
+    }
+
+    db.run(
+        'UPDATE rating_questions SET title = ?, question = ? WHERE id = ?',
+        [title || '', question, id],
+        (err) => {
+            if (err) {
+                console.error('Error updating question:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            console.log(`Updated question ${id}`);
+            res.json({ success: true });
+        }
+    );
+});
+
+adminRouter.delete('/api/config/question/:id', (req, res) => {
+    console.log(`Deleting question ${req.params.id}`);
+    const { id } = req.params;
+    db.run('UPDATE rating_questions SET is_active = 0 WHERE id = ?', [id], (err) => {
+        if (err) {
+            console.error('Error deleting question:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        console.log(`Deleted question ${id}`);
+        res.json({ success: true });
+    });
+});
 
 app.get('/rate/:token', (req, res) => {
     const token = req.params.token;
@@ -723,7 +853,7 @@ app.post('/submit-rating', (req, res) => {
     });
 });
 
-app.post(`/${ADMIN_PATH}/api/rating-questions`, (req, res) => {
+adminRouter.post('/api/rating-questions', (req, res) => {
     const { title, question } = req.body;
     if (!question) {
         return res.status(400).json({ error: 'Question is required' });
@@ -742,7 +872,7 @@ app.post(`/${ADMIN_PATH}/api/rating-questions`, (req, res) => {
     );
 });
 
-app.put(`/${ADMIN_PATH}/api/rating-questions/:id`, (req, res) => {
+adminRouter.put('/api/rating-questions/:id', (req, res) => {
     const { title, question } = req.body;
     const { id } = req.params;
 
@@ -766,7 +896,7 @@ app.put(`/${ADMIN_PATH}/api/rating-questions/:id`, (req, res) => {
     );
 });
 
-app.delete(`/${ADMIN_PATH}/api/rating-questions/:id`, (req, res) => {
+adminRouter.delete('/api/rating-questions/:id', (req, res) => {
     const { id } = req.params;
 
     db.run('DELETE FROM rating_questions WHERE id = ?', [id], (err) => {
@@ -778,7 +908,7 @@ app.delete(`/${ADMIN_PATH}/api/rating-questions/:id`, (req, res) => {
     });
 });
 
-app.post(`/${ADMIN_PATH}/api/rating-questions/reorder`, (req, res) => {
+adminRouter.post('/api/rating-questions/reorder', (req, res) => {
     const { order } = req.body;
 
     if (!Array.isArray(order)) {
