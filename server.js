@@ -789,7 +789,7 @@ app.get('/rate/:token', (req, res) => {
                 return res.status(500).send('Error retrieving questions');
             }
 
-            res.render('rate', { rating, questions });
+            res.render('rate', { layout: false, rating, questions });
         });
     });
 });
