@@ -55,6 +55,7 @@
             color: #2c3e50;
             font-size: 16px;
             margin-bottom: 15px;
+            margin-left: 5px;
         }
         .rating-question {
             background: white;
@@ -193,18 +194,26 @@
             <h2>Service Details</h2>
             <div class="row">
                 <div class="col-md-6">
-                    <div class="info-label">Invoice Number</div>
-                    <div class="info-value"><%= rating.invoice_number %></div>
-                    <div class="info-label">Invoice Date</div>
-                    <div class="info-value"><%= rating.invoice_date %></div>
+                    <div class="info-label d-inline-block">Invoice No: </div>
+                    <div class="info-value d-inline-block"><%= rating.invoice_number %></div>
+                    <div>
+                        <div class="info-label  d-inline-block">Date:</div>
+                        <div class="info-value  d-inline-block"><%= rating.invoice_date %></div>
+                    </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="info-label">Customer Name</div>
-                    <div class="info-value"><%= rating.customer_name %></div>
-                    <div class="info-label">Service</div>
-                    <div class="info-value"><%= rating.service_name %></div>
-                    <div class="info-label">Serviced by</div>
-                    <div class="info-value"><%= rating.provider_name %></div>
+                    <div>
+                        <div class="info-label  d-inline-block">Customer:</div>
+                        <div class="info-value  d-inline-block"><%= rating.customer_name %></div>
+                    </div>
+                    <div>
+                        <div class="info-label  d-inline-block">Service:</div>
+                        <div class="info-value  d-inline-block"><%= rating.service_name %></div>
+                    </div>
+                    <div>
+                        <div class="info-label  d-inline-block">Provider:</div>
+                        <div class="info-value  d-inline-block"><%= rating.provider_name %></div>
+                    </div>
                 </div>
             </div>
         </div>
