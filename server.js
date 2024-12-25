@@ -128,57 +128,78 @@ app.get('/', (req, res) => {
     res.render('index');
 });
 
-adminRouter.get('/', (req, res) => {
-    // Get customers
-    db.all('SELECT id, name, customer_id, is_active FROM customers WHERE is_active = 1', [], (err, customers) => {
-        if (err) {
-            console.error('Error fetching customers:', err);
-            return res.status(500).send('Error loading page');
-        }
-
-        // Get services
-        db.all('SELECT id, name, is_active FROM services WHERE is_active = 1', [], (err, services) => {
-            if (err) {
-                console.error('Error fetching services:', err);
-                return res.status(500).send('Error loading page');
-            }
-
-            // Get service providers
-            db.all('SELECT id, name, is_active FROM service_providers WHERE is_active = 1', [], (err, providers) => {
-                if (err) {
-                    console.error('Error fetching providers:', err);
-                    return res.status(500).send('Error loading page');
-                }
-
-                // Get invoice config
-                db.get('SELECT * FROM invoice_config WHERE id = 1', [], (err, invoiceConfig) => {
-                    if (err) {
-                        console.error('Error fetching invoice config:', err);
-                        return res.status(500).send('Error loading page');
-                    }
-
-                    // Get formatted invoice number
-                    getFormattedInvoiceNumber().then(nextInvoiceNumber => {
-                        res.render('admin', {
-                            customers,
-                            services,
-                            providers,
-                            invoiceConfig,
-                            nextInvoiceNumber,
-                            adminPath: ADMIN_PATH
-                        });
-                    }).catch(err => {
-                        console.error('Error getting invoice number:', err);
-                        res.status(500).send('Error loading page');
-                    });
-                });
+// Generate Rating Link route
+adminRouter.get('/', async (req, res) => {
+    try {
+        // Convert db.all to promises
+        const getCustomers = () => {
+            return new Promise((resolve, reject) => {
+                db.all(
+                    'SELECT id, name, customer_id, is_active FROM customers WHERE is_active = 1',
+                    [],
+                    (err, results) => err ? reject(err) : resolve(results)
+                );
             });
+        };
+
+        const getServices = () => {
+            return new Promise((resolve, reject) => {
+                db.all(
+                    'SELECT id, name, is_active FROM services WHERE is_active = 1',
+                    [],
+                    (err, results) => err ? reject(err) : resolve(results)
+                );
+            });
+        };
+
+        const getProviders = () => {
+            return new Promise((resolve, reject) => {
+                db.all(
+                    'SELECT id, name, is_active FROM service_providers WHERE is_active = 1',
+                    [],
+                    (err, results) => err ? reject(err) : resolve(results)
+                );
+            });
+        };
+
+        const getInvoiceConfig = () => {
+            return new Promise((resolve, reject) => {
+                db.get(
+                    'SELECT * FROM invoice_config WHERE id = 1',
+                    [],
+                    (err, results) => err ? reject(err) : resolve(results)
+                );
+            });
+        };
+
+        // Execute all queries in parallel since they don't depend on each other
+        const [customers, services, providers, invoiceConfig, nextInvoiceNumber] =
+            await Promise.all([
+                getCustomers(),
+                getServices(),
+                getProviders(),
+                getInvoiceConfig(),
+                getFormattedInvoiceNumber()
+            ]);
+
+        res.render('admin', {
+            customers,
+            services,
+            providers,
+            invoiceConfig,
+            nextInvoiceNumber,
+            adminPath: ADMIN_PATH
         });
-    });
+
+    } catch (error) {
+        console.error('Error loading admin page:', error);
+        res.status(500).send('Error loading page');
+    }
 });
 
-adminRouter.get('/config', (req, res) => {
-    db.serialize(() => {
+adminRouter.get('/config', async (req, res) => {
+    try {
+        // Initialize data object
         const data = {
             adminPath: ADMIN_PATH,
             questions: [],
@@ -187,44 +208,65 @@ adminRouter.get('/config', (req, res) => {
             customers: []
         };
 
-        // Get rating questions
-        db.all('SELECT * FROM rating_questions WHERE is_active = 1 ORDER BY sort_order', [], (err, questions) => {
-            if (err) {
-                console.error('Error retrieving questions:', err);
-                return res.status(500).send('Error retrieving configuration');
-            }
-            data.questions = questions;
-
-            // Get services
-            db.all('SELECT * FROM services WHERE is_active = 1 ORDER BY name', [], (err, services) => {
-                if (err) {
-                    console.error('Error retrieving services:', err);
-                    return res.status(500).send('Error retrieving configuration');
-                }
-                data.services = services;
-
-                // Get service providers
-                db.all('SELECT * FROM service_providers WHERE is_active = 1 ORDER BY name', [], (err, providers) => {
-                    if (err) {
-                        console.error('Error retrieving providers:', err);
-                        return res.status(500).send('Error retrieving configuration');
-                    }
-                    data.providers = providers;
-
-                    // Get customers
-                    db.all('SELECT * FROM customers WHERE is_active = 1 ORDER BY name', [], (err, customers) => {
-                        if (err) {
-                            console.error('Error retrieving customers:', err);
-                            return res.status(500).send('Error retrieving configuration');
-                        }
-                        data.customers = customers;
-
-                        res.render('admin/config', data);
-                    });
-                });
+        // Convert db.all to promises
+        const getRatingQuestions = () => {
+            return new Promise((resolve, reject) => {
+                db.all(
+                    'SELECT * FROM rating_questions WHERE is_active = 1 ORDER BY sort_order',
+                    [],
+                    (err, results) => err ? reject(err) : resolve(results)
+                );
             });
-        });
-    });
+        };
+
+        const getServices = () => {
+            return new Promise((resolve, reject) => {
+                db.all(
+                    'SELECT * FROM services WHERE is_active = 1 ORDER BY name',
+                    [],
+                    (err, results) => err ? reject(err) : resolve(results)
+                );
+            });
+        };
+
+        const getProviders = () => {
+            return new Promise((resolve, reject) => {
+                db.all(
+                    'SELECT * FROM service_providers WHERE is_active = 1 ORDER BY name',
+                    [],
+                    (err, results) => err ? reject(err) : resolve(results)
+                );
+            });
+        };
+
+        const getCustomers = () => {
+            return new Promise((resolve, reject) => {
+                db.all(
+                    'SELECT * FROM customers WHERE is_active = 1 ORDER BY name',
+                    [],
+                    (err, results) => err ? reject(err) : resolve(results)
+                );
+            });
+        };
+
+        // Execute all queries in parallel
+        const [questions, services, providers, customers] = await Promise.all([
+            getRatingQuestions(),
+            getServices(),
+            getProviders(),
+            getCustomers()
+        ]);
+
+        // Update data object with results
+        Object.assign(data, { questions, services, providers, customers });
+
+        // Render the config page
+        res.render('admin/config', data);
+
+    } catch (error) {
+        console.error('Error retrieving configuration:', error);
+        res.status(500).send('Error retrieving configuration');
+    }
 });
 
 adminRouter.get('/dashboard', async (req, res) => {
