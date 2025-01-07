@@ -104,86 +104,123 @@
 
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Ratings Dashboard</h2>
-            <button class="btn btn-success export-btn">
+            <h1>Ratings Dashboard</h1>
+            <button class="btn btn-outline-dark export-btn">
                 <i class="fas fa-download"></i> Export to CSV
             </button>
         </div>
 
-        <div class="rating-breakdown">
-            <h3>Rating Breakdown (All Service Providers)</h3>
-            <h2><%= stats.avg_rating %> / 5.0</h2>
-            <div class="total-ratings">(<%= stats.total %> ratings)</div>
-
-            <div class="star-rows">
-                <div class="star-row">
-                    <% for(let i = 0; i < 5; i++) { %>
-                        <i class="fas fa-star star"></i>
-                    <% } %>
-                    <span class="rating-count"><%= stats.five_star %></span>
-                </div>
-                <div class="star-row">
-                    <% for(let i = 0; i < 4; i++) { %>
-                        <i class="fas fa-star star"></i>
-                    <% } %>
-                    <i class="fas fa-star empty-star"></i>
-                    <span class="rating-count"><%= stats.four_star %></span>
-                </div>
-                <div class="star-row">
-                    <% for(let i = 0; i < 3; i++) { %>
-                        <i class="fas fa-star star"></i>
-                    <% } %>
-                    <% for(let i = 0; i < 2; i++) { %>
-                        <i class="fas fa-star empty-star"></i>
-                    <% } %>
-                    <span class="rating-count"><%= stats.three_star %></span>
-                </div>
-                <div class="star-row">
-                    <% for(let i = 0; i < 2; i++) { %>
-                        <i class="fas fa-star star"></i>
-                    <% } %>
-                    <% for(let i = 0; i < 3; i++) { %>
-                        <i class="fas fa-star empty-star"></i>
-                    <% } %>
-                    <span class="rating-count"><%= stats.two_star %></span>
-                </div>
-                <div class="star-row">
-                    <i class="fas fa-star star"></i>
-                    <% for(let i = 0; i < 4; i++) { %>
-                        <i class="fas fa-star empty-star"></i>
-                    <% } %>
-                    <span class="rating-count"><%= stats.one_star %></span>
-                </div>
-            </div>
-        </div>
-
-        <div class="rating-breakdown">
-            <h3>Rating Breakdown by Question</h3>
-            <div class="question-grid">
-                <% questionStats.forEach(function(question) { %>
-                <div class="question-rating">
-                    <h4 class="mb-3"><%= question.title || question.question %></h4>
-                    <h2><%= question.avg_rating.toFixed(1) %> / 5.0</h2>
-                    <div class="total-ratings">(<%= question.total_responses %> responses)</div>
-                    <div class="star-rows">
-                        <% [5,4,3,2,1].forEach(function(stars) { %>
-                        <div class="star-row">
-                            <% Array(stars).fill().forEach(function() { %>
-                            <i class="fas fa-star star"></i>
-                            <% }); %>
-                            <% Array(5-stars).fill().forEach(function() { %>
-                            <i class="fas fa-star empty-star"></i>
-                            <% }); %>
-                            <span class="rating-count"><%= question.distribution[stars] || 0 %></span>
+        <div class="row g-4">
+            <!-- Overall Rating Card -->
+            <div class="col-md-7">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Overall Rating</h5>
+                        <p class="text-muted">All Service Providers (<%= stats.total %> ratings)</p>
+                        
+                        <div class="d-flex align-items-baseline mb-4">
+                            <h1 class="display-3 mb-0 me-2"><%= stats.avg_rating %></h1>
+                            <h4 class="text-muted">/5.0</h4>
                         </div>
-                        <% }); %>
+
+                        <div class="rating-bars">
+                            <div class="rating-bar d-flex align-items-center mb-2">
+                                <div class="stars me-2" style="width: 120px;">
+                                    <% for(let i = 0; i < 5; i++) { %>
+                                        <i class="fas fa-star"></i>
+                                    <% } %>
+                                </div>
+                                <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                    <div class="progress-bar bg-dark" style="width: <%= (stats.five_star / stats.total * 100) || 0 %>%"></div>
+                                </div>
+                                <span class="rating-count" style="min-width: 30px;"><%= stats.five_star %></span>
+                            </div>
+                            <div class="rating-bar d-flex align-items-center mb-2">
+                                <div class="stars me-2" style="width: 120px;">
+                                    <% for(let i = 0; i < 4; i++) { %>
+                                        <i class="fas fa-star"></i>
+                                    <% } %>
+                                    <i class="far fa-star"></i>
+                                </div>
+                                <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                    <div class="progress-bar bg-dark" style="width: <%= (stats.four_star / stats.total * 100) || 0 %>%"></div>
+                                </div>
+                                <span class="rating-count" style="min-width: 30px;"><%= stats.four_star %></span>
+                            </div>
+                            <div class="rating-bar d-flex align-items-center mb-2">
+                                <div class="stars me-2" style="width: 120px;">
+                                    <% for(let i = 0; i < 3; i++) { %>
+                                        <i class="fas fa-star"></i>
+                                    <% } %>
+                                    <% for(let i = 0; i < 2; i++) { %>
+                                        <i class="far fa-star"></i>
+                                    <% } %>
+                                </div>
+                                <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                    <div class="progress-bar bg-dark" style="width: <%= (stats.three_star / stats.total * 100) || 0 %>%"></div>
+                                </div>
+                                <span class="rating-count" style="min-width: 30px;"><%= stats.three_star %></span>
+                            </div>
+                            <div class="rating-bar d-flex align-items-center mb-2">
+                                <div class="stars me-2" style="width: 120px;">
+                                    <% for(let i = 0; i < 2; i++) { %>
+                                        <i class="fas fa-star"></i>
+                                    <% } %>
+                                    <% for(let i = 0; i < 3; i++) { %>
+                                        <i class="far fa-star"></i>
+                                    <% } %>
+                                </div>
+                                <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                    <div class="progress-bar bg-dark" style="width: <%= (stats.two_star / stats.total * 100) || 0 %>%"></div>
+                                </div>
+                                <span class="rating-count" style="min-width: 30px;"><%= stats.two_star %></span>
+                            </div>
+                            <div class="rating-bar d-flex align-items-center">
+                                <div class="stars me-2" style="width: 120px;">
+                                    <i class="fas fa-star"></i>
+                                    <% for(let i = 0; i < 4; i++) { %>
+                                        <i class="far fa-star"></i>
+                                    <% } %>
+                                </div>
+                                <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                    <div class="progress-bar bg-dark" style="width: <%= (stats.one_star / stats.total * 100) || 0 %>%"></div>
+                                </div>
+                                <span class="rating-count" style="min-width: 30px;"><%= stats.one_star %></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <% }); %>
+            </div>
+
+            <!-- Question Ratings -->
+            <div class="col-md-5">
+                <div class="row g-4">
+                    <% questionStats.forEach(function(question) { %>
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title"><%= question.title || question.question %></h5>
+                                    <p class="text-muted"><%= question.total_responses %> responses</p>
+                                    
+                                    <div class="d-flex align-items-baseline">
+                                        <h2 class="mb-0 me-2"><%= question.avg_rating %></h2>
+                                        <span class="text-muted">/5.0</span>
+                                    </div>
+
+                                    <div class="stars">
+                                        <% for(let i = 0; i < 5; i++) { %>
+                                            <i class="fas fa-star <%= i < Math.round(question.avg_rating) ? '' : 'text-muted' %>"></i>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
             </div>
         </div>
 
-        <div class="filters">
+        <div class="filters mt-4">
             <div class="row g-3">
                 <div class="col-md-3">
                     <input type="text" class="form-control" id="search" 
