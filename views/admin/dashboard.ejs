@@ -146,6 +146,30 @@
             </div>
         </div>
 
+        <div class="rating-breakdown">
+            <h3>Rating Breakdown by Question</h3>
+            <% questionStats.forEach(function(question) { %>
+            <div class="question-rating mb-4">
+                <h4 class="mb-3"><%= question.title || question.question %></h4>
+                <h2><%= question.avg_rating.toFixed(1) %> / 5.0</h2>
+                <div class="total-ratings">(<%= question.total_responses %> responses)</div>
+                <div class="star-rows">
+                    <% [5,4,3,2,1].forEach(function(stars) { %>
+                    <div class="star-row">
+                        <% Array(stars).fill().forEach(function() { %>
+                        <i class="fas fa-star star"></i>
+                        <% }); %>
+                        <% Array(5-stars).fill().forEach(function() { %>
+                        <i class="fas fa-star empty-star"></i>
+                        <% }); %>
+                        <span class="rating-count"><%= question.distribution[stars] || 0 %></span>
+                    </div>
+                    <% }); %>
+                </div>
+            </div>
+            <% }); %>
+        </div>
+
         <div class="filters">
             <div class="row g-3">
                 <div class="col-md-3">

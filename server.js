@@ -125,7 +125,7 @@ app.use(`/${ADMIN_PATH}`, adminMiddleware, adminRouter);
 
 // Routes
 app.get('/', (req, res) => {
-    res.render('index');
+    res.render('index', {layout: false});
 });
 
 // Generate Rating Link route
@@ -286,33 +286,54 @@ adminRouter.get('/dashboard', async (req, res) => {
             SELECT 
                 COUNT(DISTINCT r.id) as total,
                 COALESCE(
-                    AVG(
-                        (SELECT COALESCE(AVG(rating), 0) 
-                         FROM rating_responses 
-                         WHERE rating_id = r.id)
-                    ), 0
-                ) as average
+                    ROUND(
+                        AVG(CAST(
+                            (
+                                SELECT AVG(CAST(rating AS FLOAT))
+                                FROM rating_responses
+                                WHERE rating_id = r.id
+                            ) 
+                        AS FLOAT))
+                    , 2)
+                , 0) as avg_rating
             FROM ratings r
-            WHERE r.is_submitted = 1
+            WHERE r.is_submitted = 1;
         `;
-        console.log('Running query 1:', query1);
-        
-        const stats = await new Promise((resolve, reject) => {
-            db.get(query1, [], (err, result) => {
-                if (err) {
-                    console.error('Error in query 1:', err);
-                    reject(err);
-                }
-                console.log('Query 1 result:', result);
-                resolve({
-                    total: result ? result.total : 0,
-                    average: result ? result.average : 0
-                });
-            });
-        });
+
+        // Get per-question statistics
+        const query2 = `
+            WITH QuestionStats AS (
+                SELECT 
+                    rq.id as question_id,
+                    rq.title,
+                    rq.question,
+                    COUNT(rr.rating) as total_responses,
+                    ROUND(AVG(CAST(rr.rating AS FLOAT)), 1) as avg_rating,
+                    rr.rating,
+                    COUNT(rr.rating) as rating_count
+                FROM rating_questions rq
+                LEFT JOIN rating_responses rr ON rq.id = rr.question_id
+                LEFT JOIN ratings r ON rr.rating_id = r.id
+                WHERE r.is_submitted = 1 OR r.is_submitted IS NULL
+                GROUP BY rq.id, rq.title, rq.question, rr.rating
+            )
+            SELECT 
+                question_id,
+                title,
+                question,
+                MAX(total_responses) as total_responses,
+                MAX(avg_rating) as avg_rating,
+                JSON_GROUP_OBJECT(
+                    rating,
+                    rating_count
+                ) as distribution
+            FROM QuestionStats
+            GROUP BY question_id, title, question
+            ORDER BY question_id;
+        `;
 
         // Get rating breakdown
-        const query2 = `
+        const query3 = `
             WITH RatingAverages AS (
                 SELECT 
                     r.id,
@@ -330,23 +351,46 @@ adminRouter.get('/dashboard', async (req, res) => {
             GROUP BY avg_rating
             ORDER BY avg_rating DESC
         `;
-        console.log('Running query 2:', query2);
-        
-        const breakdown = await new Promise((resolve, reject) => {
-            db.all(query2, [], (err, rows) => {
-                if (err) {
-                    console.error('Error in query 2:', err);
-                    reject(err);
-                }
-                console.log('Query 2 result:', rows);
-                resolve(rows || []);
-            });
-        });
+
+        // Get service providers
+        const query4 = `SELECT DISTINCT name FROM service_providers WHERE is_active = 1`;
+
+        // Execute all queries in parallel
+        const [ratingStats, questionStats, breakdown, providers] = await Promise.all([
+            new Promise((resolve, reject) => {
+                db.get(query1, [], (err, row) => {
+                    if (err) reject(err);
+                    resolve(row);
+                });
+            }),
+            new Promise((resolve, reject) => {
+                db.all(query2, [], (err, rows) => {
+                    if (err) reject(err);
+                    // Parse the distribution JSON string for each question
+                    rows.forEach(row => {
+                        row.distribution = JSON.parse(row.distribution || '{}');
+                    });
+                    resolve(rows);
+                });
+            }),
+            new Promise((resolve, reject) => {
+                db.all(query3, [], (err, rows) => {
+                    if (err) reject(err);
+                    resolve(rows || []);
+                });
+            }),
+            new Promise((resolve, reject) => {
+                db.all(query4, [], (err, rows) => {
+                    if (err) reject(err);
+                    resolve(rows || []);
+                });
+            })
+        ]);
 
         // Build the rating stats object
-        const ratingStats = {
-            total: stats.total || 0,
-            avg_rating: parseFloat(stats.average || 0).toFixed(1),
+        const ratingStatsObj = {
+            total: ratingStats.total || 0,
+            avg_rating: parseFloat(ratingStats.avg_rating || 0).toFixed(1),
             five_star: 0,
             four_star: 0,
             three_star: 0,
@@ -358,35 +402,20 @@ adminRouter.get('/dashboard', async (req, res) => {
         breakdown.forEach(row => {
             const rating = Math.round(row.rating);
             switch(rating) {
-                case 5: ratingStats.five_star = row.count; break;
-                case 4: ratingStats.four_star = row.count; break;
-                case 3: ratingStats.three_star = row.count; break;
-                case 2: ratingStats.two_star = row.count; break;
-                case 1: ratingStats.one_star = row.count; break;
+                case 5: ratingStatsObj.five_star = row.count; break;
+                case 4: ratingStatsObj.four_star = row.count; break;
+                case 3: ratingStatsObj.three_star = row.count; break;
+                case 2: ratingStatsObj.two_star = row.count; break;
+                case 1: ratingStatsObj.one_star = row.count; break;
             }
         });
 
-        // Get service providers
-        const query3 = `SELECT DISTINCT name FROM service_providers WHERE is_active = 1`;
-        console.log('Running query 3:', query3);
-        
-        const providers = await new Promise((resolve, reject) => {
-            db.all(query3, [], (err, rows) => {
-                if (err) {
-                    console.error('Error in query 3:', err);
-                    reject(err);
-                }
-                console.log('Query 3 result:', rows);
-                resolve(rows || []);
-            });
-        });
-
-        // Build the ratings query with filters
+        // Get ratings
         let ratingQuery = `
             SELECT 
                 r.id,
                 r.invoice_number,
-                DATE(r.invoice_date) as invoice_date,
+                r.invoice_date,
                 r.created_at,
                 r.submitted_at,
                 r.is_submitted,
@@ -409,9 +438,6 @@ adminRouter.get('/dashboard', async (req, res) => {
             LEFT JOIN service_providers sp ON r.service_provider_id = sp.id
             WHERE 1=1
         `;
-        console.log('Running ratings query:', ratingQuery);
-        console.log('Query params:', []);
-
         const queryParams = [];
 
         if (filters.search) {
@@ -446,8 +472,6 @@ adminRouter.get('/dashboard', async (req, res) => {
         }
 
         ratingQuery += ` GROUP BY r.id ORDER BY r.created_at DESC`;
-        console.log('Running ratings query:', ratingQuery);
-        console.log('Query params:', queryParams);
 
         const ratings = await new Promise((resolve, reject) => {
             db.all(ratingQuery, queryParams, (err, rows) => {
@@ -471,10 +495,11 @@ adminRouter.get('/dashboard', async (req, res) => {
         }
 
         res.render('admin/dashboard', {
-            stats: ratingStats,
-            ratings: ratings,
-            providers: providers,
-            filters: filters,
+            stats: ratingStatsObj,
+            questionStats,
+            ratings,
+            providers,
+            filters,
             formatDate: formatDate,
             ADMIN_PATH: ADMIN_PATH
         });
