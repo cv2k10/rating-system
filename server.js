@@ -283,38 +283,34 @@ adminRouter.get('/dashboard', async (req, res) => {
     try {
         // Get rating statistics
         const query1 = `
+            WITH RatingAverages AS (
+                SELECT r.id, AVG(CAST(rr.rating AS FLOAT)) as avg_rating
+                FROM ratings r
+                JOIN rating_responses rr ON r.id = rr.rating_id
+                WHERE r.is_submitted = 1
+                GROUP BY r.id
+            )
             SELECT 
-                COUNT(DISTINCT r.id) as total,
-                COALESCE(
-                    ROUND(
-                        AVG(CAST(
-                            (
-                                SELECT AVG(CAST(rating AS FLOAT))
-                                FROM rating_responses
-                                WHERE rating_id = r.id
-                            ) 
-                        AS FLOAT))
-                    , 2)
-                , 0) as avg_rating
-            FROM ratings r
-            WHERE r.is_submitted = 1;
+                COUNT(*) as total,
+                ROUND(AVG(avg_rating), 1) as avg_rating
+            FROM RatingAverages;
         `;
 
         // Get per-question statistics
         const query2 = `
-            WITH QuestionStats AS (
+            WITH RatingCounts AS (
                 SELECT 
                     rq.id as question_id,
                     rq.title,
                     rq.question,
-                    COUNT(rr.rating) as total_responses,
-                    ROUND(AVG(CAST(rr.rating AS FLOAT)), 1) as avg_rating,
                     rr.rating,
-                    COUNT(rr.rating) as rating_count
+                    COUNT(rr.rating) as rating_count,
+                    COUNT(DISTINCT r.id) as total_responses,
+                    ROUND(AVG(CAST(rr.rating AS FLOAT)), 1) as avg_rating
                 FROM rating_questions rq
                 LEFT JOIN rating_responses rr ON rq.id = rr.question_id
                 LEFT JOIN ratings r ON rr.rating_id = r.id
-                WHERE r.is_submitted = 1 OR r.is_submitted IS NULL
+                WHERE r.is_submitted = 1
                 GROUP BY rq.id, rq.title, rq.question, rr.rating
             )
             SELECT 
@@ -323,54 +319,54 @@ adminRouter.get('/dashboard', async (req, res) => {
                 question,
                 MAX(total_responses) as total_responses,
                 MAX(avg_rating) as avg_rating,
-                JSON_GROUP_OBJECT(
+                json_group_object(
                     rating,
                     rating_count
                 ) as distribution
-            FROM QuestionStats
+            FROM RatingCounts
             GROUP BY question_id, title, question
             ORDER BY question_id;
         `;
 
-        // Get rating breakdown
+        // Get rating distribution
         const query3 = `
-            WITH RatingAverages AS (
-                SELECT 
-                    r.id,
-                    ROUND(AVG(CAST(rr.rating AS FLOAT))) as avg_rating
-                FROM ratings r
-                JOIN rating_responses rr ON r.id = rr.rating_id
-                WHERE r.is_submitted = 1
-                GROUP BY r.id
-            )
             SELECT 
-                avg_rating as rating,
+                rr.rating,
                 COUNT(*) as count
-            FROM RatingAverages
-            WHERE avg_rating IS NOT NULL
-            GROUP BY avg_rating
-            ORDER BY avg_rating DESC
+            FROM rating_responses rr
+            JOIN ratings r ON rr.rating_id = r.id
+            WHERE r.is_submitted = 1
+            GROUP BY rr.rating
+            ORDER BY rr.rating DESC;
         `;
 
         // Get service providers
-        const query4 = `SELECT DISTINCT name FROM service_providers WHERE is_active = 1`;
+        const query4 = `
+            SELECT DISTINCT name 
+            FROM service_providers 
+            WHERE is_active = 1
+            ORDER BY name;
+        `;
 
-        // Execute all queries in parallel
-        const [ratingStats, questionStats, breakdown, providers] = await Promise.all([
+        // Execute all queries
+        const [stats, questionStats, breakdown, providers] = await Promise.all([
             new Promise((resolve, reject) => {
                 db.get(query1, [], (err, row) => {
                     if (err) reject(err);
-                    resolve(row);
+                    resolve(row || { total: 0, avg_rating: 0 });
                 });
             }),
             new Promise((resolve, reject) => {
                 db.all(query2, [], (err, rows) => {
                     if (err) reject(err);
-                    // Parse the distribution JSON string for each question
-                    rows.forEach(row => {
-                        row.distribution = JSON.parse(row.distribution || '{}');
-                    });
-                    resolve(rows);
+                    // Ensure rows is an array before mapping
+                    const safeRows = rows || [];
+                    // Parse the JSON distribution string for each question
+                    const processedRows = safeRows.map(row => ({
+                        ...row,
+                        distribution: JSON.parse(row.distribution || '{}')
+                    }));
+                    resolve(processedRows);
                 });
             }),
             new Promise((resolve, reject) => {
@@ -387,10 +383,10 @@ adminRouter.get('/dashboard', async (req, res) => {
             })
         ]);
 
-        // Build the rating stats object
+        // Initialize rating stats object
         const ratingStatsObj = {
-            total: ratingStats.total || 0,
-            avg_rating: parseFloat(ratingStats.avg_rating || 0).toFixed(1),
+            total: stats.total || 0,
+            avg_rating: parseFloat(stats.avg_rating || 0).toFixed(1),
             five_star: 0,
             four_star: 0,
             three_star: 0,
@@ -398,15 +394,16 @@ adminRouter.get('/dashboard', async (req, res) => {
             one_star: 0
         };
 
-        // Fill in the breakdown counts
-        breakdown.forEach(row => {
-            const rating = Math.round(row.rating);
-            switch(rating) {
-                case 5: ratingStatsObj.five_star = row.count; break;
-                case 4: ratingStatsObj.four_star = row.count; break;
-                case 3: ratingStatsObj.three_star = row.count; break;
-                case 2: ratingStatsObj.two_star = row.count; break;
-                case 1: ratingStatsObj.one_star = row.count; break;
+        // Fill in the breakdown counts from the actual data
+        (breakdown || []).forEach(row => {
+            if (row && typeof row.rating === 'number') {
+                switch(row.rating) {
+                    case 5: ratingStatsObj.five_star = row.count || 0; break;
+                    case 4: ratingStatsObj.four_star = row.count || 0; break;
+                    case 3: ratingStatsObj.three_star = row.count || 0; break;
+                    case 2: ratingStatsObj.two_star = row.count || 0; break;
+                    case 1: ratingStatsObj.one_star = row.count || 0; break;
+                }
             }
         });
 
@@ -498,8 +495,8 @@ adminRouter.get('/dashboard', async (req, res) => {
             stats: ratingStatsObj,
             questionStats,
             ratings,
-            providers,
             filters,
+            providers,
             formatDate: formatDate,
             ADMIN_PATH: ADMIN_PATH
         });
