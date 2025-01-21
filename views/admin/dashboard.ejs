@@ -1,4 +1,30 @@
     <style>
+        body { background-color: #f8f9fa; }
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        .stars .star { 
+            color: #ffc107; 
+        }
+        .stars .empty-star { 
+            color: #dee2e6; 
+        }
+        .progress {
+            background-color: #f1f1f1;
+            border-radius: 4px;
+        }
+        .progress-bar {
+            border-radius: 4px;
+            background-color: #212529;
+        }
+        .filters {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
         .brand-header {
             background: #fff;
             padding: 15px 30px;
@@ -34,22 +60,9 @@
             margin: 10px 0;
             gap: 10px;
         }
-        .star {
-            color: #ffc107;
-        }
-        .empty-star {
-            color: #e4e5e9;
-        }
         .rating-count {
             min-width: 30px;
             text-align: center;
-        }
-        .filters {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
         }
         .ratings-table {
             background: #fff;
@@ -127,7 +140,7 @@
                             <div class="rating-bar d-flex align-items-center mb-2">
                                 <div class="stars me-2" style="width: 120px;">
                                     <% for(let i = 0; i < 5; i++) { %>
-                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star star"></i>
                                     <% } %>
                                 </div>
                                 <div class="progress flex-grow-1 me-2" style="height: 8px;">
@@ -138,9 +151,9 @@
                             <div class="rating-bar d-flex align-items-center mb-2">
                                 <div class="stars me-2" style="width: 120px;">
                                     <% for(let i = 0; i < 4; i++) { %>
-                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star star"></i>
                                     <% } %>
-                                    <i class="far fa-star"></i>
+                                    <i class="fas fa-star empty-star"></i>
                                 </div>
                                 <div class="progress flex-grow-1 me-2" style="height: 8px;">
                                     <div class="progress-bar bg-dark" style="width: <%= (stats.four_star / stats.total * 100) || 0 %>%"></div>
@@ -150,10 +163,10 @@
                             <div class="rating-bar d-flex align-items-center mb-2">
                                 <div class="stars me-2" style="width: 120px;">
                                     <% for(let i = 0; i < 3; i++) { %>
-                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star star"></i>
                                     <% } %>
                                     <% for(let i = 0; i < 2; i++) { %>
-                                        <i class="far fa-star"></i>
+                                        <i class="fas fa-star empty-star"></i>
                                     <% } %>
                                 </div>
                                 <div class="progress flex-grow-1 me-2" style="height: 8px;">
@@ -164,10 +177,10 @@
                             <div class="rating-bar d-flex align-items-center mb-2">
                                 <div class="stars me-2" style="width: 120px;">
                                     <% for(let i = 0; i < 2; i++) { %>
-                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star star"></i>
                                     <% } %>
                                     <% for(let i = 0; i < 3; i++) { %>
-                                        <i class="far fa-star"></i>
+                                        <i class="fas fa-star empty-star"></i>
                                     <% } %>
                                 </div>
                                 <div class="progress flex-grow-1 me-2" style="height: 8px;">
@@ -177,9 +190,9 @@
                             </div>
                             <div class="rating-bar d-flex align-items-center">
                                 <div class="stars me-2" style="width: 120px;">
-                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star star"></i>
                                     <% for(let i = 0; i < 4; i++) { %>
-                                        <i class="far fa-star"></i>
+                                        <i class="fas fa-star empty-star"></i>
                                     <% } %>
                                 </div>
                                 <div class="progress flex-grow-1 me-2" style="height: 8px;">
@@ -209,7 +222,7 @@
 
                                     <div class="stars">
                                         <% for(let i = 0; i < 5; i++) { %>
-                                            <i class="fas fa-star <%= i < Math.round(question.avg_rating) ? '' : 'text-muted' %>"></i>
+                                            <i class="fas fa-star <%= i < Math.round(question.avg_rating) ? 'star' : 'empty-star' %>"></i>
                                         <% } %>
                                     </div>
                                 </div>
@@ -270,8 +283,8 @@
                         <th data-sort="rating">Rating <i class="fas fa-sort sort-icon"></i></th>
                         <th>Review</th>
                         <th data-sort="is_submitted">Status <i class="fas fa-sort sort-icon"></i></th>
-                        <th data-sort="created_at">Created <i class="fas fa-sort sort-icon"></i></th>
-                        <th data-sort="submitted_at">Submitted <i class="fas fa-sort sort-icon"></i></th>
+                        <!-- <th data-sort="created_at">Created <i class="fas fa-sort sort-icon"></i></th> -->
+                        <!-- <th data-sort="submitted_at">Submitted <i class="fas fa-sort sort-icon"></i></th> -->
                     </tr>
                 </thead>
                 <tbody>
@@ -283,24 +296,11 @@
                             <td><%= rating.service_name %></td>
                             <td><%= rating.provider_name %></td>
                             <td>
-                                <% if (rating.rating) { %>
-                                    <% 
-                                        const fullStars = Math.floor(rating.rating);
-                                        const hasHalfStar = rating.rating % 1 >= 0.5;
-                                    %>
-                                    <% for(let i = 0; i < fullStars; i++) { %>
-                                        <i class="fas fa-star star"></i>
+                                <div class="stars">
+                                    <% for(let i = 0; i < 5; i++) { %>
+                                        <i class="fas fa-star <%= i < Math.round(rating.rating) ? 'star' : 'empty-star' %>"></i>
                                     <% } %>
-                                    <% if (hasHalfStar) { %>
-                                        <i class="fas fa-star-half-alt star"></i>
-                                    <% } %>
-                                    <% for(let i = Math.ceil(rating.rating); i < 5; i++) { %>
-                                        <i class="fas fa-star empty-star"></i>
-                                    <% } %>
-                                    (<%= rating.rating %>)
-                                <% } else { %>
-                                    -
-                                <% } %>
+                                </div>
                             </td>
                             <td><%= rating.review_text || '-' %></td>
                             <td>
@@ -310,8 +310,8 @@
                                     <span class="status-badge status-pending">Pending</span>
                                 <% } %>
                             </td>
-                            <td><%= formatDate(rating.created_at) %></td>
-                            <td><%= formatDate(rating.submitted_at) %></td>
+                            <!-- <td><%= formatDate(rating.created_at) %></td> -->
+                            <!-- <td><%= formatDate(rating.submitted_at) %></td> -->
                         </tr>
                     <% }); %>
                 </tbody>

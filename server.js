@@ -281,7 +281,7 @@ adminRouter.get('/dashboard', async (req, res) => {
     };
 
     try {
-        // Get rating statistics
+        // Get rating statistics (stats)
         const query1 = `
             WITH RatingAverages AS (
                 SELECT r.id, AVG(CAST(rr.rating AS FLOAT)) as avg_rating
@@ -296,7 +296,7 @@ adminRouter.get('/dashboard', async (req, res) => {
             FROM RatingAverages;
         `;
 
-        // Get per-question statistics
+        // Get per-question statistics (questionStats)
         const query2 = `
             WITH RatingCounts AS (
                 SELECT 
@@ -311,7 +311,7 @@ adminRouter.get('/dashboard', async (req, res) => {
                 LEFT JOIN rating_responses rr ON rq.id = rr.question_id
                 LEFT JOIN ratings r ON rr.rating_id = r.id
                 WHERE r.is_submitted = 1
-                GROUP BY rq.id, rq.title, rq.question, rr.rating
+                GROUP BY rq.id, rq.title, rq.question
             )
             SELECT 
                 question_id,
@@ -328,7 +328,7 @@ adminRouter.get('/dashboard', async (req, res) => {
             ORDER BY question_id;
         `;
 
-        // Get rating distribution
+        // Get rating distribution (breakdown)
         const query3 = `
             SELECT 
                 rr.rating,
@@ -340,7 +340,7 @@ adminRouter.get('/dashboard', async (req, res) => {
             ORDER BY rr.rating DESC;
         `;
 
-        // Get service providers
+        // Get service providers (providers)
         const query4 = `
             SELECT DISTINCT name 
             FROM service_providers 
@@ -350,6 +350,10 @@ adminRouter.get('/dashboard', async (req, res) => {
 
         // Execute all queries
         const [stats, questionStats, breakdown, providers] = await Promise.all([
+            // query1: get total and average rating
+            // query2: get rating distribution per question
+            // query3: get overall rating distribution
+            // query4: get service providers
             new Promise((resolve, reject) => {
                 db.get(query1, [], (err, row) => {
                     if (err) reject(err);
