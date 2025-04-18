@@ -126,10 +126,13 @@
                                     <button class="btn btn-sm btn-outline-primary edit-btn" 
                                             data-id="<%= q.id %>"
                                             data-title="<%= q.title %>"
-                                            data-question="<%= q.question %>">
+                                            data-question="<%= q.question %>"
+                                            onclick="editQuestion('<%= q.id %>')">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger delete-btn" data-id="<%= q.id %>">
+                                    <button class="btn btn-sm btn-outline-danger delete-btn" 
+                                            data-id="<%= q.id %>"
+                                            onclick="deleteQuestion('<%= q.id %>')">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>

@@ -287,7 +287,9 @@ adminRouter.get('/dashboard', async (req, res) => {
                 SELECT r.id, AVG(CAST(rr.rating AS FLOAT)) as avg_rating
                 FROM ratings r
                 JOIN rating_responses rr ON r.id = rr.rating_id
+                ${filters.serviceBy ? 'LEFT JOIN service_providers sp ON r.service_provider_id = sp.id' : ''}
                 WHERE r.is_submitted = 1
+                ${filters.serviceBy ? 'AND sp.name = ?' : ''}
                 GROUP BY r.id
             )
             SELECT 
@@ -295,6 +297,8 @@ adminRouter.get('/dashboard', async (req, res) => {
                 ROUND(AVG(avg_rating), 1) as avg_rating
             FROM RatingAverages;
         `;
+
+        const query1Params = filters.serviceBy ? [filters.serviceBy] : [];
 
         // Get per-question statistics (questionStats)
         const query2 = `
@@ -355,7 +359,7 @@ adminRouter.get('/dashboard', async (req, res) => {
             // query3: get overall rating distribution
             // query4: get service providers
             new Promise((resolve, reject) => {
-                db.get(query1, [], (err, row) => {
+                db.get(query1, query1Params, (err, row) => {
                     if (err) reject(err);
                     resolve(row || { total: 0, avg_rating: 0 });
                 });
