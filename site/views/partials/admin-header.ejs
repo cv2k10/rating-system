@@ -1,0 +1,29 @@
+<style>
+.custom-link {
+    color: rgb(75, 85, 99);    /* text-gray-100 */
+    text-decoration: none;         /* no-underline */
+    transition-property: color;    /* transition-colors */
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+.custom-link:hover {
+    color: rgb(17, 24, 39);       /* hover:text-gray-900 */
+}
+</style>
+
+<header class="brand-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="">
+            <img src="https://hotspringenzymebath.com/cdn/shop/files/logo3_x120@2x.png" alt="HotSpring" class="img-fluid" style="max-height: 100px; object-fit: contain;">
+        </div>
+        <nav>
+            <a href="/<%= ADMIN_PATH %>/dashboard" class="custom-link me-2">Dashboard</a>
+            <a href="/<%= ADMIN_PATH %>/config" class="custom-link me-2">Configuration</a>
+            <a class="btn btn-primary" href="/<%= ADMIN_PATH %>">
+                <i class="fas fa-plus-circle"></i>
+                <span class="tab-text">Generate Rating Link</span>
+            </a>
+        </nav>
+    </div>
+</header>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="ratings.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="3"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="2849"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="customers" custom_title="0" dock_id="2" table="4,9:maincustomers"/><table title="customers" custom_title="0" dock_id="4" table="4,9:maincustomers"/><table title="sqlite_sequence" custom_title="0" dock_id="1" table="4,15:mainsqlite_sequence"/><table title="customers" custom_title="0" dock_id="3" table="4,9:maincustomers"/><dock_state state="000000ff00000000fd0000000100000002000005dc0000035afc0100000001fc00000000000005dc0000010100fffffffa000000000100000004fb000000160064006f0063006b00420072006f00770073006500310100000000ffffffff0000010100fffffffb000000160064006f0063006b00420072006f00770073006500320100000000ffffffff0000010100fffffffb000000160064006f0063006b00420072006f00770073006500330100000000ffffffff0000010100fffffffb000000160064006f0063006b00420072006f00770073006500340100000000ffffffff0000010100ffffff0000029d0000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="customers" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="21"/><column index="2" value="89"/><column index="3" value="74"/><column index="4" value="112"/><column index="5" value="112"/><column index="6" value="66"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="invoice_config" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="21"/><column index="2" value="74"/><column index="3" value="46"/><column index="4" value="114"/><column index="5" value="112"/><column index="6" value="112"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="rating_questions" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="21"/><column index="2" value="170"/><column index="3" value="300"/><column index="4" value="78"/><column index="5" value="66"/><column index="6" value="112"/><column index="7" value="112"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="rating_responses" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="21"/><column index="2" value="69"/><column index="3" value="86"/><column index="4" value="47"/><column index="5" value="112"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="ratings" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort><column index="0" mode="0"/></sort><column_widths><column index="1" value="21"/><column index="2" value="112"/><column index="3" value="90"/><column index="4" value="91"/><column index="5" value="77"/><column index="6" value="139"/><column index="7" value="300"/><column index="8" value="47"/><column index="9" value="134"/><column index="10" value="112"/><column index="11" value="112"/><column index="12" value="93"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes><y_axis name="service_id" line_style="1" point_shape="5" colour="#004586" active="0"/><y2_axis name="service_id" line_style="1" point_shape="5" colour="#ff420e" active="0"/><y2_axis name="service_provider_id" line_style="1" point_shape="5" colour="#ffd320" active="0"/></plot_y_axes><global_filter/></table><table schema="main" name="service_providers" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="21"/><column index="2" value="44"/><column index="3" value="112"/><column index="4" value="66"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="services" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="21"/><column index="2" value="167"/><column index="3" value="112"/><column index="4" value="66"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="sqlite_sequence" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="98"/><column index="2" value="32"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1*">            WITH RatingCounts AS (
+                SELECT 
+                    rq.id as question_id,
+                    rq.title,
+                    rq.question,
+                    rr.rating,
+                    COUNT(rr.rating) as rating_count,
+                    COUNT(DISTINCT r.id) as total_responses,
+                    ROUND(AVG(CAST(rr.rating AS FLOAT)), 1) as avg_rating
+                FROM rating_questions rq
+                LEFT JOIN rating_responses rr ON rq.id = rr.question_id
+                LEFT JOIN ratings r ON rr.rating_id = r.id
+                WHERE r.is_submitted = 1
+                GROUP BY rq.id, rq.title, rq.question, rr.rating
+            )
+            SELECT 
+                question_id,
+                title,
+                question,
+                MAX(total_responses) as total_responses,
+                MAX(avg_rating) as avg_rating,
+                json_group_object(
+                    rating,
+                    rating_count
+                ) as distribution
+            FROM RatingCounts
+            GROUP BY question_id, title, question
+            ORDER BY question_id;
+			</sql><sql name="SQL 2*">SELECT 
+                    rq.id as question_id,
+                    rq.title,
+                    rq.question,
+                    rr.rating,
+                    COUNT(rr.rating) as rating_count,
+                    COUNT(DISTINCT r.id) as total_responses,
+                    ROUND(AVG(CAST(rr.rating AS FLOAT)), 1) as avg_rating
+                FROM rating_questions rq 
+                LEFT JOIN rating_responses rr ON rq.id = rr.question_id
+				LEFT JOIN ratings r ON rr.rating_id = r.id
+                WHERE r.is_submitted = 1
+                 GROUP BY rq.id, rq.title, rq.question</sql><current_tab id="1"/></tab_sql></sqlb_project>

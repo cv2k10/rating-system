@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HotSpring - Submit Rating</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 30px;
+            margin-bottom: 50px;
+        }
+
+
+        .brand-header {
+            background: #fff;
+            padding: 15px 30px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 20px;
+        }
+        .brand-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+
+        .info-card {
+            background-color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .info-card h2 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .info-label {
+            color: #6c757d;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .info-value {
+            color: #2c3e50;
+            font-size: 16px;
+            margin-bottom: 15px;
+            margin-left: 5px;
+        }
+        .rating-question {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.05);
+            transition: transform 0.2s ease;
+        }
+        .rating-question:hover {
+            transform: translateY(-2px);
+        }
+        .rating-question h4 {
+            color: #2c3e50;
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        .star-rating {
+            font-size: 2.2em;
+            padding: 10px 0;
+        }
+        .star {
+            cursor: pointer;
+            color: #dee2e6;
+            transition: color 0.2s ease;
+            margin: 0 2px;
+        }
+        .star:hover {
+            color: #ffc107;
+        }
+        .star.active {
+            color: #ffc107;
+        }
+        .rating-description {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 8px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            display: none;
+        }
+        .rating-description.active {
+            display: inline-block;
+            animation: fadeIn 0.3s ease;
+        }
+        .form-group label {
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .form-control {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 16px;
+        }
+        .form-control:focus {
+            border-color: #80bdff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+        .overall-rating {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 30px 0;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .overall-rating h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        .star-rating-display {
+            font-size: 28px;
+            color: #ffc107;
+            margin-bottom: 10px;
+        }
+        .rating-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-left: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #0062cc, #007bff);
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,123,255,0.2);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,123,255,0.3);
+        }
+        .alert-success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            animation: slideIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="brand-header py-0 mb-4">
+        <div class="">
+            <img src="https://hotspringenzymebath.com/cdn/shop/files/logo3_x120@2x.png" alt="HotSpring" class="img-fluid" style="max-height: 100px; object-fit: contain;">
+        </div>
+    </header>
+    <div class="container">
+        <div class="info-card">
+            <h2>Service Details</h2>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="info-label d-inline-block">Invoice No: </div>
+                    <div class="info-value d-inline-block"><%= rating.invoice_number %></div>
+                    <div>
+                        <div class="info-label  d-inline-block">Date:</div>
+                        <div class="info-value  d-inline-block"><%= rating.invoice_date %></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div>
+                        <div class="info-label  d-inline-block">Customer:</div>
+                        <div class="info-value  d-inline-block"><%= rating.customer_name %></div>
+                    </div>
+                    <div>
+                        <div class="info-label  d-inline-block">Service:</div>
+                        <div class="info-value  d-inline-block"><%= rating.service_name %></div>
+                    </div>
+                    <div>
+                        <div class="info-label  d-inline-block">Provider:</div>
+                        <div class="info-value  d-inline-block"><%= rating.provider_name %></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <form id="ratingForm">
+            <input type="hidden" id="invoice_number" value="<%= rating.invoice_number %>">
+            <input type="hidden" id="validation_token" value="<%= rating.validation_token %>">
+            
+            <div class="rating-questions">
+                <% questions.forEach(function(q, index) { %>
+                    <div class="rating-question" data-aos="fade-up" data-aos-delay="<%= index * 100 %>">
+                        <% if (q.title) { %>
+                            <h4><%= q.title %></h4>
+                        <% } %>
+                        <p class="mb-3"><%= q.question %></p>
+                        <div class="d-flex align-items-center">
+                            <div class="star-rating" data-question-id="<%= q.id %>">
+                                <span class="star" data-rating="1"><i class="fas fa-star"></i></span>
+                                <span class="star" data-rating="2"><i class="fas fa-star"></i></span>
+                                <span class="star" data-rating="3"><i class="fas fa-star"></i></span>
+                                <span class="star" data-rating="4"><i class="fas fa-star"></i></span>
+                                <span class="star" data-rating="5"><i class="fas fa-star"></i></span>
+                            </div>
+                            <div class="ms-3">
+                                <div class="rating-description" data-rating="1">Poor</div>
+                                <div class="rating-description" data-rating="2">Fair</div>
+                                <div class="rating-description" data-rating="3">Good</div>
+                                <div class="rating-description" data-rating="4">Very Good</div>
+                                <div class="rating-description" data-rating="5">Excellent</div>
+                            </div>
+                        </div>
+                    </div>
+                <% }); %>
+            </div>
+
+            <div class="rating-question">
+                <div class="form-group">
+                    <label for="review">Additional Comments (Optional)</label>
+                    <textarea class="form-control" id="review" name="review" rows="4" 
+                              placeholder="Please share your experience with us..."></textarea>
+                </div>
+            </div>
+
+            <div class="overall-rating">
+                <h4>Overall Rating</h4>
+                <div class="star-rating-display">
+                    <% for(let i = 1; i <= 5; i++) { %>
+                        <i class="fas fa-star"></i>
+                    <% } %>
+                    <span class="rating-value">0.0</span>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary submit-btn w-100">
+                    <i class="fas fa-paper-plane me-2"></i>Submit Rating
+                </button>
+            </div>
+
+            <div id="thankYou" class="alert alert-success mt-4 d-none">
+                <i class="fas fa-check-circle me-2"></i>
+                Thank you for your valuable feedback! Your rating has been submitted successfully.
+            </div>
+        </form>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            AOS.init({
+                duration: 800,
+                once: true
+            });
+            
+            const ratings = {};
+
+            // Star rating interaction
+            document.querySelectorAll('.star-rating').forEach(ratingGroup => {
+                const questionId = ratingGroup.dataset.questionId;
+                const stars = Array.from(ratingGroup.querySelectorAll('.star'));
+                ratings[questionId] = 0;
+
+                const descriptionElements = ratingGroup.parentElement.querySelectorAll('.rating-description');
+
+                stars.forEach(star => {
+                    star.addEventListener('mouseover', function() {
+                        const rating = this.dataset.rating;
+                        stars.forEach(s => {
+                            if (s.dataset.rating <= rating) {
+                                s.classList.add('active');
+                            } else {
+                                s.classList.remove('active');
+                            }
+                        });
+
+                        // Show rating description
+                        descriptionElements.forEach(desc => {
+                            if (desc.dataset.rating === rating) {
+                                desc.classList.add('active');
+                            } else {
+                                desc.classList.remove('active');
+                            }
+                        });
+                    });
+
+                    star.addEventListener('mouseout', function() {
+                        const currentRating = ratings[questionId];
+                        stars.forEach(s => {
+                            if (s.dataset.rating <= currentRating) {
+                                s.classList.add('active');
+                            } else {
+                                s.classList.remove('active');
+                            }
+                        });
+
+                        // Show current rating description
+                        descriptionElements.forEach(desc => {
+                            if (desc.dataset.rating == currentRating) {
+                                desc.classList.add('active');
+                            } else {
+                                desc.classList.remove('active');
+                            }
+                        });
+                    });
+
+                    star.addEventListener('click', function() {
+                        const rating = parseInt(this.dataset.rating);
+                        ratings[questionId] = rating;
+                        updateOverallRating();
+                    });
+                });
+            });
+
+            function updateOverallRating() {
+                const values = Object.values(ratings).filter(r => r > 0);
+                if (values.length > 0) {
+                    const average = values.reduce((a, b) => a + b, 0) / values.length;
+                    const displayStars = document.querySelectorAll('.star-rating-display .fa-star');
+                    displayStars.forEach((star, index) => {
+                        if (index < Math.floor(average)) {
+                            star.style.color = '#ffc107';
+                        } else if (index === Math.floor(average) && average % 1 > 0) {
+                            star.style.color = '#ffc107';
+                            star.style.opacity = average % 1;
+                        } else {
+                            star.style.color = '#dee2e6';
+                            star.style.opacity = 1;
+                        }
+                    });
+                    document.querySelector('.rating-value').textContent = average.toFixed(1);
+                }
+            }
+
+            document.getElementById('ratingForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                // Check if all questions are rated
+                const unratedQuestions = Object.values(ratings).filter(r => r === 0).length;
+                if (unratedQuestions > 0) {
+                    alert('Please rate all questions before submitting.');
+                    return;
+                }
+
+                const formData = {
+                    validation_token: document.getElementById('validation_token').value,
+                    ratings: ratings,
+                    review_text: document.getElementById('review').value
+                };
+
+                try {
+                    const response = await fetch('/submit-rating', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (response.ok) {
+                        document.getElementById('thankYou').classList.remove('d-none');
+                        document.querySelector('button[type="submit"]').disabled = true;
+                        
+                        // Scroll to thank you message
+                        document.getElementById('thankYou').scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        });
+                    } else {
+                        throw new Error('Failed to submit rating');
+                    }
+                } catch (error) {
+                    alert('Error submitting rating. Please try again.');
+                    console.error('Error:', error);
+                }
+            });
+        });
+    </script>
+    <link href="https://unpkg.com/aos@next/dist/aos.css" rel="stylesheet">
+</body>
+</html>
